@@ -343,8 +343,8 @@ static void draw_top_info_bar(const Game_t *game)
 
 static void draw_bottom_help_bar(void)
 {
-  fill_rect(0, 226U, TFT_WIDTH, 14U, 0x0000U);
-  draw_text_centered(229U, "PRESS X: PAUSE", COLOR_YELLOW, 1U);
+  fill_rect(0, 231U, TFT_WIDTH, 9U, 0x0000U);
+  draw_text_centered(232U, "PRESS X: PAUSE", COLOR_YELLOW, 1U);
 }
 
 static void draw_pause_overlay(const Console_t *console)
@@ -722,22 +722,54 @@ void LCD_Render(const Game_t *game, const Console_t *console)
   {
     case CONSOLE_STATE_OFF:
     {
-      uint32_t total_seconds = HAL_GetTick() / 1000U;
-      uint8_t hours   = (uint8_t)((total_seconds / 3600U) % 24U);
-      uint8_t minutes = (uint8_t)((total_seconds / 60U) % 60U);
-      uint8_t seconds = (uint8_t)(total_seconds % 60U);
-      
-      uint8_t day = 16U;
-      uint8_t month = 1U;
-      uint16_t year = 2026U;
+      static uint32_t last_sec = 0xFFFFFFFFUL;
+      uint32_t total_sec = HAL_GetTick() / 1000U;
 
-      char dateTimeStr[36];
-      snprintf(dateTimeStr, sizeof(dateTimeStr), "%02u-%02u-%04u %02u:%02u:%02u - 35 C", 
-               day, month, year, hours, minutes, seconds);
-      
-      // Pulizia atomica della sola riga dell'orologio sul pannello per evitare sovrapposizioni
-      fill_rect(25U, 145U, 270U, 12U, COLOR_PANEL);
-      draw_text_centered(147U, dateTimeStr, COLOR_WHITE, 1U);
+      if (total_sec != last_sec) {
+        last_sec = total_sec;
+
+        // Base orario ricavata dalla compilazione (__TIME__ "HH:MM:SS" e __DATE__ "Mmm dd yyyy")
+        static uint8_t base_h = 16U, base_m = 48U, base_s = 0U;
+        static uint8_t base_day = 5U, base_month = 10U;
+        static uint16_t base_year = 2026U;
+        static bool time_parsed = false;
+
+        if (!time_parsed) {
+          const char *build_time = __TIME__; // "HH:MM:SS"
+          base_h = (uint8_t)((build_time[0] - '0') * 10 + (build_time[1] - '0'));
+          base_m = (uint8_t)((build_time[3] - '0') * 10 + (build_time[4] - '0'));
+          base_s = (uint8_t)((build_time[6] - '0') * 10 + (build_time[7] - '0'));
+
+          const char *build_date = __DATE__; // "Mmm dd yyyy"
+          base_day = (uint8_t)((build_date[4] == ' ' ? 0 : build_date[4] - '0') * 10 + (build_date[5] - '0'));
+          base_year = (uint16_t)((build_date[7] - '0') * 1000 + (build_date[8] - '0') * 100 +
+                                 (build_date[9] - '0') * 10 + (build_date[10] - '0'));
+          const char *months[] = {"Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"};
+          for (uint8_t m = 0; m < 12U; m++) {
+            if (strncmp(build_date, months[m], 3) == 0) {
+              base_month = m + 1U;
+              break;
+            }
+          }
+          time_parsed = true;
+        }
+
+        uint32_t current_sec_of_day = (uint32_t)base_h * 3600U + (uint32_t)base_m * 60U + base_s + total_sec;
+        uint32_t days_elapsed = current_sec_of_day / 86400U;
+        current_sec_of_day %= 86400U;
+
+        uint8_t cur_h = (uint8_t)(current_sec_of_day / 3600U);
+        uint8_t cur_m = (uint8_t)((current_sec_of_day / 60U) % 60U);
+        uint8_t cur_s = (uint8_t)(current_sec_of_day % 60U);
+        uint8_t cur_d = (uint8_t)(base_day + days_elapsed);
+
+        char dateTimeStr[36];
+        snprintf(dateTimeStr, sizeof(dateTimeStr), "%02u-%02u-%04u %02u:%02u:%02u - 35 C", 
+                 cur_d, base_month, base_year, cur_h, cur_m, cur_s);
+        
+        fill_rect(25U, 145U, 270U, 12U, COLOR_PANEL);
+        draw_text_centered(147U, dateTimeStr, COLOR_WHITE, 1U);
+      }
       break;
     }
     case CONSOLE_STATE_NAME:

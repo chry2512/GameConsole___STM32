@@ -282,9 +282,25 @@ static void build_maze(Game_t *game) {
     for (uint16_t i = 0; i < game->snake.length; i++) {
         game->maze.cells[point_index(game->snake.body[i])] = 0U;
     }
+    // Garantisce che il serpente non abbia ostacoli nel percorso immediato (3 celle avanti)
+    Point_t ahead = game->snake.body[0];
+    for (uint8_t step = 0; step < 3U; step++) {
+        ahead = next_point(ahead, game->snake.dir);
+        if (valid_point(ahead)) {
+            game->maze.cells[point_index(ahead)] = 0U;
+        }
+    }
+
     for (uint8_t enemyIndex = 0U; enemyIndex < game->enemyCount; enemyIndex++) {
         for (uint16_t i = 0; i < game->enemies[enemyIndex].length; i++) {
             game->maze.cells[point_index(game->enemies[enemyIndex].body[i])] = 0U;
+        }
+        Point_t eAhead = game->enemies[enemyIndex].body[0];
+        for (uint8_t step = 0; step < 2U; step++) {
+            eAhead = next_point(eAhead, game->enemies[enemyIndex].dir);
+            if (valid_point(eAhead)) {
+                game->maze.cells[point_index(eAhead)] = 0U;
+            }
         }
     }
 }
