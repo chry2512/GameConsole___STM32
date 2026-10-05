@@ -62,7 +62,16 @@ static void leaderboard_save(void) {
     erase.Sector = LEADERBOARD_FLASH_SECTOR;
     erase.NbSectors = 1U;
     erase.VoltageRange = FLASH_VOLTAGE_RANGE_3;
+
+    // Disabilita data cache prima di scrivere/cancellare la Flash
+    __HAL_FLASH_DATA_CACHE_DISABLE();
+    __HAL_FLASH_INSTRUCTION_CACHE_DISABLE();
+
     HAL_FLASH_Unlock();
+    // Pulisce i flag di errore pendenti
+    __HAL_FLASH_CLEAR_FLAG(FLASH_FLAG_EOP | FLASH_FLAG_OPERR | FLASH_FLAG_WRPERR | 
+                           FLASH_FLAG_PGAERR | FLASH_FLAG_PGPERR | FLASH_FLAG_PGSERR);
+
     if (HAL_FLASHEx_Erase(&erase, &sectorError) == HAL_OK) {
         const uint32_t *words = (const uint32_t *)&storage;
         for (size_t index = 0U; index < sizeof(storage) / sizeof(uint32_t); index++) {
@@ -74,6 +83,12 @@ static void leaderboard_save(void) {
         }
     }
     HAL_FLASH_Lock();
+
+    // Resetta e riabilita le cache
+    __HAL_FLASH_INSTRUCTION_CACHE_RESET();
+    __HAL_FLASH_DATA_CACHE_RESET();
+    __HAL_FLASH_INSTRUCTION_CACHE_ENABLE();
+    __HAL_FLASH_DATA_CACHE_ENABLE();
 #else
     FILE *file = fopen("snake_leaderboard.dat", "wb");
     if (file != NULL) {
@@ -98,6 +113,10 @@ void Snake_Leaderboard_Load(void) {
 #endif
     if (leaderboard_storage_valid(&storage)) {
         memcpy(leaderboard, storage.entries, sizeof(leaderboard));
+    } else {
+        // Se la memoria non e' formattata o e' vergine (0xFF), inizializzala pulita
+        memset(leaderboard, 0, sizeof(leaderboard));
+        leaderboard_save();
     }
     leaderboardLoaded = true;
 }
@@ -105,20 +124,28 @@ void Snake_Leaderboard_Load(void) {
 static void leaderboard_submit(const Game_t *game) {
     if (game == NULL) return;
     Snake_Leaderboard_Load();
+
+    const char *pName = (game->playerName[0] != '\0') ? game->playerName : "PLAYER1";
+
     uint8_t position = SNAKE_LEADERBOARD_SIZE;
     for (uint8_t index = 0U; index < SNAKE_LEADERBOARD_SIZE; index++) {
-        if (game->score >= leaderboard[index].score &&
-            (leaderboard[index].playerName[0] == '\0' || game->score > 0U)) {
+        // Se slot libero oppure punteggio migliore o uguale
+        if (leaderboard[index].playerName[0] == '\0') {
+            position = index;
+            break;
+        }
+        if (game->score >= leaderboard[index].score) {
             position = index;
             break;
         }
     }
     if (position == SNAKE_LEADERBOARD_SIZE) return;
+
     for (uint8_t index = SNAKE_LEADERBOARD_SIZE - 1U; index > position; index--) {
         leaderboard[index] = leaderboard[index - 1U];
     }
     memset(&leaderboard[position], 0, sizeof(leaderboard[position]));
-    strncpy(leaderboard[position].playerName, game->playerName, SNAKE_NAME_MAX_LENGTH);
+    strncpy(leaderboard[position].playerName, pName, SNAKE_NAME_MAX_LENGTH);
     leaderboard[position].score = game->score;
     leaderboard_save();
 }

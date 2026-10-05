@@ -5,6 +5,11 @@ void Console_Init(Console_t *console, Game_t *game) {
     if (console == NULL) return;
     console->state = CONSOLE_STATE_OFF;
     console->selectedLevel = LEVEL_EASY;
+    console->kbdRow = 0U;
+    console->kbdCol = 0U;
+    console->pauseBtn = PAUSE_BTN_RESUME;
+    console->gameOverBtn = GAMEOVER_BTN_RESTART;
+    console->leaderboardBtn = LEADERBOARD_BTN_RESTART;
     if (game != NULL) {
         Snake_SetPlayerName(game, "Serpente");
         game->state = GAME_STATE_IDLE;
@@ -31,6 +36,8 @@ void Console_HandleEvent(Console_t *console, Game_t *game, ConsoleEvent_t event,
         case CONSOLE_STATE_START:
             if (event == CONSOLE_EVENT_X) {
                 Snake_SetPlayerName(game, "");
+                console->kbdRow = 0U;
+                console->kbdCol = 0U;
                 console->state = CONSOLE_STATE_NAME;
             }
             break;
@@ -41,44 +48,144 @@ void Console_HandleEvent(Console_t *console, Game_t *game, ConsoleEvent_t event,
             } else if (event == CONSOLE_EVENT_NAME_BACKSPACE) {
                 Snake_BackspacePlayerName(game);
             } else if (event == CONSOLE_EVENT_NAME_CONFIRM) {
+                if (game->playerName[0] == '\0') {
+                    Snake_SetPlayerName(game, "PLAYER1");
+                }
                 console->state = CONSOLE_STATE_DIFFICULTY;
             } else if (event == CONSOLE_EVENT_BACK) {
                 console->state = CONSOLE_STATE_START;
+            } else if (event == CONSOLE_EVENT_UP) {
+                if (console->kbdRow > 0U) console->kbdRow--;
+                else console->kbdRow = 3U;
+            } else if (event == CONSOLE_EVENT_DOWN) {
+                if (console->kbdRow < 3U) console->kbdRow++;
+                else console->kbdRow = 0U;
+            } else if (event == CONSOLE_EVENT_LEFT) {
+                if (console->kbdCol > 0U) console->kbdCol--;
+                else console->kbdCol = 6U;
+            } else if (event == CONSOLE_EVENT_RIGHT) {
+                if (console->kbdCol < 6U) console->kbdCol++;
+                else console->kbdCol = 0U;
+            } else if (event == CONSOLE_EVENT_BUTTON_SELECT) {
+                // Riga 0: A-G, Riga 1: H-N, Riga 2: O-U, Riga 3: V-Z, DEL, OK
+                if (console->kbdRow < 3U) {
+                    char c = (char)('A' + (console->kbdRow * 7U + console->kbdCol));
+                    Snake_AppendPlayerNameChar(game, c);
+                } else {
+                    if (console->kbdCol < 5U) {
+                        char c = (char)('V' + console->kbdCol);
+                        Snake_AppendPlayerNameChar(game, c);
+                    } else if (console->kbdCol == 5U) {
+                        // DEL
+                        Snake_BackspacePlayerName(game);
+                    } else {
+                        // OK / CONFIRM
+                        if (game->playerName[0] == '\0') {
+                            Snake_SetPlayerName(game, "PLAYER1");
+                        }
+                        console->state = CONSOLE_STATE_DIFFICULTY;
+                    }
+                }
             }
             break;
 
         case CONSOLE_STATE_DIFFICULTY:
             if (event == CONSOLE_EVENT_BACK) {
                 console->state = CONSOLE_STATE_START;
-            } else if (event == CONSOLE_EVENT_UP) {
+            } else if (event == CONSOLE_EVENT_UP || event == CONSOLE_EVENT_LEFT) {
                 if (console->selectedLevel == LEVEL_EASY) console->selectedLevel = LEVEL_HARD;
                 else console->selectedLevel--;
-            } else if (event == CONSOLE_EVENT_DOWN) {
+            } else if (event == CONSOLE_EVENT_DOWN || event == CONSOLE_EVENT_RIGHT) {
                 if (console->selectedLevel == LEVEL_HARD) console->selectedLevel = LEVEL_EASY;
                 else console->selectedLevel++;
-            } else if (event == CONSOLE_EVENT_LEVEL_EASY) {
+            } else if (event == CONSOLE_EVENT_LEVEL_EASY || event == CONSOLE_EVENT_BUTTON_SELECT) {
                 Snake_InitLevel(game, console->selectedLevel);
                 console->state = CONSOLE_STATE_GAME;
+                console->pauseBtn = PAUSE_BTN_RESUME;
+                console->gameOverBtn = GAMEOVER_BTN_RESTART;
             } else if (event == CONSOLE_EVENT_LEVEL_MEDIUM) {
                 Snake_InitLevel(game, console->selectedLevel);
                 console->state = CONSOLE_STATE_GAME;
+                console->pauseBtn = PAUSE_BTN_RESUME;
+                console->gameOverBtn = GAMEOVER_BTN_RESTART;
             } else if (event == CONSOLE_EVENT_LEVEL_HARD) {
                 Snake_InitLevel(game, console->selectedLevel);
                 console->state = CONSOLE_STATE_GAME;
+                console->pauseBtn = PAUSE_BTN_RESUME;
+                console->gameOverBtn = GAMEOVER_BTN_RESTART;
             }
             break;
 
         case CONSOLE_STATE_GAME:
-            if (event == CONSOLE_EVENT_RESTART) {
-                Snake_InitLevel(game, console->selectedLevel);
+            if (game->state == GAME_STATE_PAUSED) {
+                if (event == CONSOLE_EVENT_UP || event == CONSOLE_EVENT_LEFT) {
+                    if (console->pauseBtn > 0) console->pauseBtn--;
+                    else console->pauseBtn = PAUSE_BTN_COUNT - 1;
+                } else if (event == CONSOLE_EVENT_DOWN || event == CONSOLE_EVENT_RIGHT) {
+                    if (console->pauseBtn + 1 < PAUSE_BTN_COUNT) console->pauseBtn++;
+                    else console->pauseBtn = 0;
+                } else if (event == CONSOLE_EVENT_BUTTON_SELECT || event == CONSOLE_EVENT_PAUSE) {
+                    if (console->pauseBtn == PAUSE_BTN_RESUME) {
+                        Snake_TogglePause(game);
+                    } else if (console->pauseBtn == PAUSE_BTN_RETURN_START) {
+                        game->state = GAME_STATE_IDLE;
+                        console->state = CONSOLE_STATE_START;
+                    }
+                }
+            } else if (game->state == GAME_STATE_GAMEOVER) {
+                if (event == CONSOLE_EVENT_UP || event == CONSOLE_EVENT_LEFT) {
+                    if (console->gameOverBtn > 0) console->gameOverBtn--;
+                    else console->gameOverBtn = GAMEOVER_BTN_COUNT - 1;
+                } else if (event == CONSOLE_EVENT_DOWN || event == CONSOLE_EVENT_RIGHT) {
+                    if (console->gameOverBtn + 1 < GAMEOVER_BTN_COUNT) console->gameOverBtn++;
+                    else console->gameOverBtn = 0;
+                } else if (event == CONSOLE_EVENT_BUTTON_SELECT || event == CONSOLE_EVENT_RESTART) {
+                    if (console->gameOverBtn == GAMEOVER_BTN_RESTART) {
+                        Snake_InitLevel(game, console->selectedLevel);
+                    } else if (console->gameOverBtn == GAMEOVER_BTN_VIEW_SCORE) {
+                        console->leaderboardBtn = LEADERBOARD_BTN_RESTART;
+                        console->state = CONSOLE_STATE_LEADERBOARD;
+                    } else if (console->gameOverBtn == GAMEOVER_BTN_RETURN_START) {
+                        game->state = GAME_STATE_IDLE;
+                        console->state = CONSOLE_STATE_START;
+                    }
+                }
+            } else {
+                // Gioco in corso (RUNNING / TRANSITION)
+                if (event == CONSOLE_EVENT_RESTART) {
+                    Snake_InitLevel(game, console->selectedLevel);
+                } else if (event == CONSOLE_EVENT_BACK) {
+                    game->state = GAME_STATE_IDLE;
+                    console->state = CONSOLE_STATE_START;
+                } else if (event == CONSOLE_EVENT_UP) Snake_SetDirection(game, DIR_DOWN);
+                else if (event == CONSOLE_EVENT_DOWN) Snake_SetDirection(game, DIR_UP);
+                else if (event == CONSOLE_EVENT_LEFT) Snake_SetDirection(game, DIR_LEFT);
+                else if (event == CONSOLE_EVENT_RIGHT) Snake_SetDirection(game, DIR_RIGHT);
+                else if (event == CONSOLE_EVENT_PAUSE || event == CONSOLE_EVENT_BUTTON_SELECT) {
+                    console->pauseBtn = PAUSE_BTN_RESUME;
+                    Snake_TogglePause(game);
+                }
+            }
+            break;
+
+        case CONSOLE_STATE_LEADERBOARD:
+            if (event == CONSOLE_EVENT_UP || event == CONSOLE_EVENT_LEFT) {
+                if (console->leaderboardBtn > 0) console->leaderboardBtn--;
+                else console->leaderboardBtn = LEADERBOARD_BTN_COUNT - 1;
+            } else if (event == CONSOLE_EVENT_DOWN || event == CONSOLE_EVENT_RIGHT) {
+                if (console->leaderboardBtn + 1 < LEADERBOARD_BTN_COUNT) console->leaderboardBtn++;
+                else console->leaderboardBtn = 0;
+            } else if (event == CONSOLE_EVENT_BUTTON_SELECT) {
+                if (console->leaderboardBtn == LEADERBOARD_BTN_RESTART) {
+                    Snake_InitLevel(game, console->selectedLevel);
+                    console->state = CONSOLE_STATE_GAME;
+                } else if (console->leaderboardBtn == LEADERBOARD_BTN_RETURN_HOME) {
+                    game->state = GAME_STATE_IDLE;
+                    console->state = CONSOLE_STATE_START;
+                }
             } else if (event == CONSOLE_EVENT_BACK) {
-                game->state = GAME_STATE_IDLE;
                 console->state = CONSOLE_STATE_START;
-            } else if (event == CONSOLE_EVENT_UP) Snake_SetDirection(game, DIR_UP);
-            else if (event == CONSOLE_EVENT_DOWN) Snake_SetDirection(game, DIR_DOWN);
-            else if (event == CONSOLE_EVENT_LEFT) Snake_SetDirection(game, DIR_LEFT);
-            else if (event == CONSOLE_EVENT_RIGHT) Snake_SetDirection(game, DIR_RIGHT);
-            else if (event == CONSOLE_EVENT_PAUSE) Snake_TogglePause(game);
+            }
             break;
 
         default:

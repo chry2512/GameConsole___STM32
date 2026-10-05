@@ -74,7 +74,7 @@ void Enter_StopMode_Process(void);
 #define TFT_WIDTH 320
 #define RENDER_TASK_PERIOD 33
 #define EVENT_FLAG_PAUSE (1U << 0)
-#define LOGIC_TASK_PERIOD 100
+#define LOGIC_TASK_PERIOD 20
 #define BTN_ON_OFF_Pin GPIO_PIN_3
 #define BTN_ON_OFF_GPIO_Port GPIOE
 #define BTN_ON_OFF_EXTI_IRQn EXTI3_IRQn
