@@ -78,7 +78,10 @@ void MX_ADC1_Init(void)
   {
     Error_Handler();
   }
+
   /* USER CODE BEGIN ADC1_Init 2 */
+
+  // Continuous X/Y ADC conversion via DMA
 
   if (HAL_ADC_Start_DMA(&hadc1, (uint32_t *)joystickAdcValues, 2U) != HAL_OK)
   {
@@ -165,6 +168,8 @@ void HAL_ADC_MspDeInit(ADC_HandleTypeDef* adcHandle)
 }
 
 /* USER CODE BEGIN 1 */
+
+// reads the  joystick position 
 void ADC_ReadJoystick(uint16_t *x, uint16_t *y)
 {
   if (x != NULL) *x = joystickAdcValues[0];

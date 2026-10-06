@@ -5,10 +5,13 @@
 #include <stdbool.h>
 
 
+// GRID DIMENSIONS
+
 #define GRID_WIDTH   32
-#define GRID_HEIGHT  24
+#define GRID_HEIGHT  21
 #define MAX_SNAKE_LENGTH (GRID_WIDTH * GRID_HEIGHT)
 #define MAX_GRID_CELLS (GRID_WIDTH * GRID_HEIGHT)
+// GAME CONFIGURATION
 #define MAX_AI_SNAKES 4U
 #define MAX_FOODS 5U
 #define FOODS_PER_STAGE 5U
@@ -16,12 +19,15 @@
 #define SNAKE_NAME_MAX_LENGTH 12U
 #define SNAKE_LEADERBOARD_SIZE 10U
 
+//JOYSTICK CONFIGURATION
 typedef enum {
     DIR_UP = 0,
     DIR_DOWN,
     DIR_LEFT,
     DIR_RIGHT
 } Direction_t;
+
+//LEVEL
 
 typedef enum {
     LEVEL_EASY = 0,
@@ -30,12 +36,13 @@ typedef enum {
 } Level_t;
 
 
+//JOYSTICK X/Y POINT STRUCTURE
 typedef struct {
     int16_t x;
     int16_t y;
 } Point_t;
 
-
+// GAME STATE ENUMERATION
 typedef enum {
     GAME_STATE_IDLE = 0,
     GAME_STATE_RUNNING,

@@ -1,6 +1,10 @@
 #include "console.h"
 #include <stddef.h>
 
+/*/
+ * CONSOLE HANDLER
+ */
+
 void Console_Init(Console_t *console, Game_t *game) {
     if (console == NULL) return;
     console->state = CONSOLE_STATE_OFF;
@@ -12,29 +16,40 @@ void Console_Init(Console_t *console, Game_t *game) {
     console->leaderboardBtn = LEADERBOARD_BTN_RESTART;
     if (game != NULL) {
         Snake_SetPlayerName(game, "Serpente");
-        game->state = GAME_STATE_IDLE;
+        game->state = GAME_STATE_IDLE; // NOT READY
     }
 }
 
 void Console_HandleEvent(Console_t *console, Game_t *game, ConsoleEvent_t event, char character) {
     if (console == NULL || game == NULL) return;
 
-    if (event == CONSOLE_EVENT_POWER) {
+    if (event == CONSOLE_EVENT_POWER || event == CONSOLE_EVENT_X) {
         if (console->state == CONSOLE_STATE_OFF) {
-            console->state = CONSOLE_STATE_START;
+            console->state = CONSOLE_STATE_LOAD;
             game->state = GAME_STATE_IDLE;
-        } else {
+            return;
+        } else if (event == CONSOLE_EVENT_POWER) {
             console->state = CONSOLE_STATE_OFF;
             game->state = GAME_STATE_IDLE;
+            return;
         }
-        return;
     }
 
     if (console->state == CONSOLE_STATE_OFF) return;
 
     switch (console->state) {
+
+        // console load
+        case CONSOLE_STATE_LOAD:
+            if (event == CONSOLE_EVENT_X || event == CONSOLE_EVENT_BUTTON_SELECT) {
+                console->state = CONSOLE_STATE_START;
+            }
+            break;
+
+
+        // snake home page
         case CONSOLE_STATE_START:
-            if (event == CONSOLE_EVENT_X) {
+            if (event == CONSOLE_EVENT_X || event == CONSOLE_EVENT_BUTTON_SELECT) {
                 Snake_SetPlayerName(game, "");
                 console->kbdRow = 0U;
                 console->kbdCol = 0U;
@@ -42,6 +57,7 @@ void Console_HandleEvent(Console_t *console, Game_t *game, ConsoleEvent_t event,
             }
             break;
 
+        // snake name input
         case CONSOLE_STATE_NAME:
             if (event == CONSOLE_EVENT_NAME_CHAR) {
                 Snake_AppendPlayerNameChar(game, character);
@@ -67,7 +83,7 @@ void Console_HandleEvent(Console_t *console, Game_t *game, ConsoleEvent_t event,
                 if (console->kbdCol < 6U) console->kbdCol++;
                 else console->kbdCol = 0U;
             } else if (event == CONSOLE_EVENT_BUTTON_SELECT) {
-                // Riga 0: A-G, Riga 1: H-N, Riga 2: O-U, Riga 3: V-Z, DEL, OK
+               
                 if (console->kbdRow < 3U) {
                     char c = (char)('A' + (console->kbdRow * 7U + console->kbdCol));
                     Snake_AppendPlayerNameChar(game, c);
@@ -76,10 +92,10 @@ void Console_HandleEvent(Console_t *console, Game_t *game, ConsoleEvent_t event,
                         char c = (char)('V' + console->kbdCol);
                         Snake_AppendPlayerNameChar(game, c);
                     } else if (console->kbdCol == 5U) {
-                        // DEL
+                        // BACKSPACE
                         Snake_BackspacePlayerName(game);
                     } else {
-                        // OK / CONFIRM
+                        // CONFIRM
                         if (game->playerName[0] == '\0') {
                             Snake_SetPlayerName(game, "PLAYER1");
                         }
@@ -89,6 +105,7 @@ void Console_HandleEvent(Console_t *console, Game_t *game, ConsoleEvent_t event,
             }
             break;
 
+        // snake difficulty selection
         case CONSOLE_STATE_DIFFICULTY:
             if (event == CONSOLE_EVENT_BACK) {
                 console->state = CONSOLE_STATE_START;
@@ -116,6 +133,7 @@ void Console_HandleEvent(Console_t *console, Game_t *game, ConsoleEvent_t event,
             }
             break;
 
+        // GAME STATE: RUNNING / PAUSED / GAMEOVER
         case CONSOLE_STATE_GAME:
             if (game->state == GAME_STATE_PAUSED) {
                 if (event == CONSOLE_EVENT_UP || event == CONSOLE_EVENT_LEFT) {
@@ -151,7 +169,7 @@ void Console_HandleEvent(Console_t *console, Game_t *game, ConsoleEvent_t event,
                     }
                 }
             } else {
-                // Gioco in corso (RUNNING / TRANSITION)
+
                 if (event == CONSOLE_EVENT_RESTART) {
                     Snake_InitLevel(game, console->selectedLevel);
                 } else if (event == CONSOLE_EVENT_BACK) {
@@ -168,6 +186,7 @@ void Console_HandleEvent(Console_t *console, Game_t *game, ConsoleEvent_t event,
             }
             break;
 
+        // LEADERBOARD STATE CONSOLE
         case CONSOLE_STATE_LEADERBOARD:
             if (event == CONSOLE_EVENT_UP || event == CONSOLE_EVENT_LEFT) {
                 if (console->leaderboardBtn > 0) console->leaderboardBtn--;

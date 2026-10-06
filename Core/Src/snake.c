@@ -2,11 +2,7 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
-#if defined(STM32F407xx)
 #include "stm32f4xx_hal.h"
-#else
-#include <stdio.h>
-#endif
 
 #define INITIAL_MOVE_INTERVAL_MS 250U
 #define MIN_MOVE_INTERVAL_MS 140U
@@ -17,10 +13,8 @@
 #define FOOD_MAZE_GAP_STAGE 95U
 #define LEADERBOARD_MAGIC 0x534E4B31UL
 #define LEADERBOARD_VERSION 1U
-#if defined(STM32F407xx)
 #define LEADERBOARD_FLASH_ADDRESS 0x08060000UL
 #define LEADERBOARD_FLASH_SECTOR FLASH_SECTOR_7
-#endif
 
 typedef struct {
     uint32_t magic;
@@ -31,6 +25,8 @@ typedef struct {
 
 static LeaderboardEntry_t leaderboard[SNAKE_LEADERBOARD_SIZE];
 static bool leaderboardLoaded = false;
+static bool dirChangedThisTick = false;
+
 
 static uint32_t leaderboard_checksum(const LeaderboardStorage_t *storage) {
     const uint8_t *bytes = (const uint8_t *)storage;
@@ -43,19 +39,25 @@ static uint32_t leaderboard_checksum(const LeaderboardStorage_t *storage) {
     return checksum;
 }
 
+/**
+ * checksum integrity of stored leaderboard.
+ */
 static bool leaderboard_storage_valid(const LeaderboardStorage_t *storage) {
     return storage->magic == LEADERBOARD_MAGIC &&
            storage->version == LEADERBOARD_VERSION &&
            storage->checksum == leaderboard_checksum(storage);
 }
 
+/**
+ * Saves leaderboard records to STM32 internal Flash (Sector 7).
+ */
 static void leaderboard_save(void) {
     LeaderboardStorage_t storage = {0};
     storage.magic = LEADERBOARD_MAGIC;
     storage.version = LEADERBOARD_VERSION;
     memcpy(storage.entries, leaderboard, sizeof(leaderboard));
     storage.checksum = leaderboard_checksum(&storage);
-#if defined(STM32F407xx)
+
     FLASH_EraseInitTypeDef erase = {0};
     uint32_t sectorError = 0U;
     erase.TypeErase = FLASH_TYPEERASE_SECTORS;
@@ -63,12 +65,12 @@ static void leaderboard_save(void) {
     erase.NbSectors = 1U;
     erase.VoltageRange = FLASH_VOLTAGE_RANGE_3;
 
-    // Disabilita data cache prima di scrivere/cancellare la Flash
+    
     __HAL_FLASH_DATA_CACHE_DISABLE();
     __HAL_FLASH_INSTRUCTION_CACHE_DISABLE();
 
     HAL_FLASH_Unlock();
-    // Pulisce i flag di errore pendenti
+ 
     __HAL_FLASH_CLEAR_FLAG(FLASH_FLAG_EOP | FLASH_FLAG_OPERR | FLASH_FLAG_WRPERR | 
                            FLASH_FLAG_PGAERR | FLASH_FLAG_PGPERR | FLASH_FLAG_PGSERR);
 
@@ -84,43 +86,36 @@ static void leaderboard_save(void) {
     }
     HAL_FLASH_Lock();
 
-    // Resetta e riabilita le cache
+
     __HAL_FLASH_INSTRUCTION_CACHE_RESET();
     __HAL_FLASH_DATA_CACHE_RESET();
     __HAL_FLASH_INSTRUCTION_CACHE_ENABLE();
     __HAL_FLASH_DATA_CACHE_ENABLE();
-#else
-    FILE *file = fopen("snake_leaderboard.dat", "wb");
-    if (file != NULL) {
-        (void)fwrite(&storage, sizeof(storage), 1U, file);
-        fclose(file);
-    }
-#endif
 }
 
+/**
+ * @brief Loads high scores from STM32 internal Flash 
+ */
 void Snake_Leaderboard_Load(void) {
     if (leaderboardLoaded) return;
     memset(leaderboard, 0, sizeof(leaderboard));
     LeaderboardStorage_t storage = {0};
-#if defined(STM32F407xx)
+
     memcpy(&storage, (const void *)LEADERBOARD_FLASH_ADDRESS, sizeof(storage));
-#else
-    FILE *file = fopen("snake_leaderboard.dat", "rb");
-    if (file != NULL) {
-        (void)fread(&storage, sizeof(storage), 1U, file);
-        fclose(file);
-    }
-#endif
+
     if (leaderboard_storage_valid(&storage)) {
         memcpy(leaderboard, storage.entries, sizeof(leaderboard));
     } else {
-        // Se la memoria non e' formattata o e' vergine (0xFF), inizializzala pulita
+        // FORMAT: Reset leaderboard if invalid or corrupted
         memset(leaderboard, 0, sizeof(leaderboard));
         leaderboard_save();
     }
     leaderboardLoaded = true;
 }
 
+/**
+ * Checks and inserts current player's score 
+ */
 static void leaderboard_submit(const Game_t *game) {
     if (game == NULL) return;
     Snake_Leaderboard_Load();
@@ -129,7 +124,7 @@ static void leaderboard_submit(const Game_t *game) {
 
     uint8_t position = SNAKE_LEADERBOARD_SIZE;
     for (uint8_t index = 0U; index < SNAKE_LEADERBOARD_SIZE; index++) {
-        // Se slot libero oppure punteggio migliore o uguale
+        
         if (leaderboard[index].playerName[0] == '\0') {
             position = index;
             break;
@@ -150,6 +145,9 @@ static void leaderboard_submit(const Game_t *game) {
     leaderboard_save();
 }
 
+/**
+ * Returns the count of valid recorded 
+ */
 uint8_t Snake_Leaderboard_Count(void) {
     Snake_Leaderboard_Load();
     for (uint8_t index = 0U; index < SNAKE_LEADERBOARD_SIZE; index++) {
@@ -158,11 +156,17 @@ uint8_t Snake_Leaderboard_Count(void) {
     return SNAKE_LEADERBOARD_SIZE;
 }
 
+/**
+ * Retrieves a pointer to a leaderboard entry by rank index 
+ */
 const LeaderboardEntry_t *Snake_Leaderboard_Get(uint8_t position) {
     Snake_Leaderboard_Load();
     return position < SNAKE_LEADERBOARD_SIZE ? &leaderboard[position] : NULL;
 }
 
+/**
+ * Transitions game state to GAME_STATE_GAMEOVER and submits the final score
+ */
 static void set_game_over(Game_t *game) {
     if (game->state != GAME_STATE_GAMEOVER) {
         game->state = GAME_STATE_GAMEOVER;
@@ -170,6 +174,9 @@ static void set_game_over(Game_t *game) {
     }
 }
 
+/**
+ *  Transitions game state to GAME_STATE_VICTORY upon completing all stages
+ */
 static void set_victory(Game_t *game) {
     if (game->state != GAME_STATE_VICTORY) {
         game->state = GAME_STATE_VICTORY;
@@ -177,23 +184,38 @@ static void set_victory(Game_t *game) {
     }
 }
 
+/**
+ * Checks if two coordinate points are equal.
+ */
 static bool same_point(Point_t first, Point_t second) {
     return first.x == second.x && first.y == second.y;
 }
 
+/**
+ * Checks if the active player name triggers the easter egg ("CHRY").
+ */
 static bool is_chry(const Game_t *game) {
     return game != NULL && strcmp(game->playerName, "CHRY") == 0;
 }
 
+/**
+ * Checks if point coordinates match top-right or bottom-right grid corners.
+ */
 static bool is_right_corner(Point_t point) {
     return point.x == GRID_WIDTH - 1 &&
            (point.y == 0 || point.y == GRID_HEIGHT - 1);
 }
 
+/**
+ * @Validates if coordinates lie strictly within the playable grid bounds.
+ */
 static bool valid_point(Point_t point) {
     return point.x >= 0 && point.x < GRID_WIDTH && point.y >= 0 && point.y < GRID_HEIGHT;
 }
 
+/**
+ * Calculates the neighboring point offset by one step in the specified direction.
+ */
 static Point_t next_point(Point_t point, Direction_t direction) {
     switch (direction) {
         case DIR_UP: point.y--; break;
@@ -204,10 +226,16 @@ static Point_t next_point(Point_t point, Direction_t direction) {
     return point;
 }
 
+/**
+ *  Converts 2D grid coordinates into a 1D linear array index.
+ */
 static uint16_t point_index(Point_t point) {
     return (uint16_t)(point.y * GRID_WIDTH + point.x);
 }
 
+/**
+ *  Checks if a coordinate is trapped between two walls to prevent unreachable food spawns.
+ */
 static bool food_between_walls(const Game_t *game, Point_t point) {
     bool betweenHorizontalWalls = point.x > 0 && point.x < GRID_WIDTH - 1 &&
         game->maze.cells[point_index((Point_t){point.x - 1, point.y})] != 0U &&
@@ -218,11 +246,17 @@ static bool food_between_walls(const Game_t *game, Point_t point) {
     return betweenHorizontalWalls || betweenVerticalWalls;
 }
 
+/**
+ *  Returns the target count of simultaneous food items for the given stage.
+ */
 static uint8_t food_count_for_stage(uint16_t stage) {
     uint16_t count = 1U + stage / 20U;
     return (uint8_t)(count > MAX_FOODS ? MAX_FOODS : count);
 }
 
+/**
+ * Checks whether a given point intersects any segment of a snake's body.
+ */
 static bool snake_contains(const Snake_t *snake, Point_t point, uint16_t length) {
     for (uint16_t i = 0; i < length; i++) {
         if (same_point(snake->body[i], point)) return true;
@@ -230,16 +264,23 @@ static bool snake_contains(const Snake_t *snake, Point_t point, uint16_t length)
     return false;
 }
 
+/**
+ *  Marks a single coordinate cell as a solid obstacle wall.
+ */
 static void add_wall(Game_t *game, int16_t x, int16_t y) {
     Point_t point = {x, y};
     if (valid_point(point)) game->maze.cells[point_index(point)] = 1U;
 }
 
+/**
+ *  Generates a horizontal wall row leaving a passable gap corridor.
+ */
 static void add_horizontal_wall(Game_t *game, int16_t y, int16_t gapStart, int16_t gapLength) {
     for (int16_t x = 2; x < GRID_WIDTH - 2; x++) {
         if (x < gapStart || x >= gapStart + gapLength) add_wall(game, x, y);
     }
 }
+
 
 static void build_maze(Game_t *game) {
     for (uint16_t i = 0; i < MAX_GRID_CELLS; i++) game->maze.cells[i] = 0U;
@@ -282,7 +323,7 @@ static void build_maze(Game_t *game) {
     for (uint16_t i = 0; i < game->snake.length; i++) {
         game->maze.cells[point_index(game->snake.body[i])] = 0U;
     }
-    // Garantisce che il serpente non abbia ostacoli nel percorso immediato (3 celle avanti)
+    // Clear the 3 cells ahead of the snake's head to prevent immediate collision with walls
     Point_t ahead = game->snake.body[0];
     for (uint8_t step = 0; step < 3U; step++) {
         ahead = next_point(ahead, game->snake.dir);
@@ -296,7 +337,7 @@ static void build_maze(Game_t *game) {
             game->maze.cells[point_index(game->enemies[enemyIndex].body[i])] = 0U;
         }
         Point_t eAhead = game->enemies[enemyIndex].body[0];
-        for (uint8_t step = 0; step < 2U; step++) {
+        for (uint8_t step = 0; step < 2U; step++) { 
             eAhead = next_point(eAhead, game->enemies[enemyIndex].dir);
             if (valid_point(eAhead)) {
                 game->maze.cells[point_index(eAhead)] = 0U;
@@ -305,17 +346,26 @@ static void build_maze(Game_t *game) {
     }
 }
 
+/**
+ *  Checks if a coordinate cell contains a static obstacle or is out of bounds.
+ */
 bool Snake_IsObstacle(const Game_t *game, Point_t point) {
     if (game == NULL || !valid_point(point)) return true;
     return game->maze.cells[point_index(point)] != 0U;
 }
 
+/**
+ *  Calculates active AI enemies count based on level and stage (spawns only in LEVEL_HARD).
+ */
 static uint8_t enemy_count_for_stage(const Game_t *game) {
     if (game == NULL || game->level != LEVEL_HARD) return 0U;
     uint16_t count = 1U + game->stage / 15U;
     return (uint8_t)(count > MAX_AI_SNAKES ? MAX_AI_SNAKES : count);
 }
 
+/**
+ * Initializes and places AI enemy snakes at their predefined corner spawn points.
+ */
 static void init_enemies(Game_t *game) {
     static const Point_t starts[MAX_AI_SNAKES] = {
         {GRID_WIDTH - 5, GRID_HEIGHT - 3},
@@ -337,6 +387,9 @@ static void init_enemies(Game_t *game) {
     }
 }
 
+/**
+ * Checks if a coordinate is occupied by any active AI enemy snake body segment.
+ */
 static bool occupied_by_enemy(const Game_t *game, Point_t point) {
     for (uint8_t enemyIndex = 0U; enemyIndex < game->enemyCount; enemyIndex++) {
         if (snake_contains(&game->enemies[enemyIndex], point, game->enemies[enemyIndex].length)) return true;
@@ -344,6 +397,9 @@ static bool occupied_by_enemy(const Game_t *game, Point_t point) {
     return false;
 }
 
+/**
+ *  Checks if a coordinate is occupied by any enemy snake excluding a specific AI index.
+ */
 static bool occupied_by_other_enemy(const Game_t *game, Point_t point, uint8_t excludedIndex) {
     for (uint8_t enemyIndex = 0U; enemyIndex < game->enemyCount; enemyIndex++) {
         if (enemyIndex != excludedIndex &&
@@ -352,6 +408,9 @@ static bool occupied_by_other_enemy(const Game_t *game, Point_t point, uint8_t e
     return false;
 }
 
+/**
+ *  Returns the index of the AI enemy located at the given point, or -1 if none.
+ */
 static int8_t enemy_at(const Game_t *game, Point_t point) {
     for (uint8_t enemyIndex = 0U; enemyIndex < game->enemyCount; enemyIndex++) {
         if (game->enemies[enemyIndex].length > 0U &&
@@ -362,6 +421,9 @@ static int8_t enemy_at(const Game_t *game, Point_t point) {
     return -1;
 }
 
+/**
+ *  Automatically escalates difficulty tier as stages progress (EASY -> MEDIUM -> HARD).
+ */
 static void update_level_for_stage(Game_t *game) {
     if (game->initialLevel == LEVEL_EASY) {
         if (game->stage >= 21U) game->level = LEVEL_HARD;
@@ -371,10 +433,16 @@ static void update_level_for_stage(Game_t *game) {
     }
 }
 
+/**
+ *  Initializes a default snake game session starting on Easy level.
+ */
 void Snake_Init(Game_t *game) {
     Snake_InitLevel(game, LEVEL_EASY);
 }
 
+/**
+ * @ Initializes game board, player snake, enemies, maze, and foods for a specified difficulty.
+ */
 void Snake_InitLevel(Game_t *game, Level_t level) {
     if (game == NULL) return;
     game->level = level;
@@ -382,6 +450,7 @@ void Snake_InitLevel(Game_t *game, Level_t level) {
     game->snake.length = 3;
     game->snake.dir = DIR_RIGHT;
     game->snake.nextDir = DIR_RIGHT;
+    dirChangedThisTick = false;
     game->snake.body[0] = (Point_t){GRID_WIDTH / 2, GRID_HEIGHT / 2};
     game->snake.body[1] = (Point_t){GRID_WIDTH / 2 - 1, GRID_HEIGHT / 2};
     game->snake.body[2] = (Point_t){GRID_WIDTH / 2 - 2, GRID_HEIGHT / 2};
@@ -401,6 +470,9 @@ void Snake_InitLevel(Game_t *game, Level_t level) {
     Snake_RespawnFood(game);
 }
 
+/**
+ *  Sets the player nickname string.
+ */
 void Snake_SetPlayerName(Game_t *game, const char *name) {
     if (game == NULL) return;
     if (name == NULL) name = "Serpente";
@@ -408,6 +480,9 @@ void Snake_SetPlayerName(Game_t *game, const char *name) {
     game->playerName[SNAKE_NAME_MAX_LENGTH] = '\0';
 }
 
+/**
+ * Appends an ASCII character to the player name buffer.
+ */
 bool Snake_AppendPlayerNameChar(Game_t *game, char character) {
     if (game == NULL || character < ' ' || character > '~') return false;
     size_t length = strlen(game->playerName);
@@ -417,37 +492,60 @@ bool Snake_AppendPlayerNameChar(Game_t *game, char character) {
     return true;
 }
 
+/**
+ *  Removes the trailing character from the player name buffer.
+ */
 void Snake_BackspacePlayerName(Game_t *game) {
     if (game == NULL) return;
     size_t length = strlen(game->playerName);
     if (length > 0U) game->playerName[length - 1U] = '\0';
 }
 
+/**
+ * Retrieves the current player nickname string.
+ */
 const char *Snake_GetPlayerName(const Game_t *game) {
     return game == NULL ? "" : game->playerName;
 }
 
+/**
+ * Sets game difficulty and reinitializes the game session.
+ */
 void Snake_SetLevel(Game_t *game, Level_t level) {
     Snake_InitLevel(game, level);
 }
 
+/**
+ * Sets the player snake direction
+ * @note Checks against current physical direction (snake.dir) to prevent 180-degree self-collision,
+ *       and latches only 1 direction change per update tick.
+ */
 void Snake_SetDirection(Game_t *game, Direction_t newDir) {
     if (game == NULL || newDir > DIR_RIGHT) return;
-    Direction_t currentDir = game->snake.nextDir;
-    if ((newDir == DIR_UP && currentDir != DIR_DOWN) ||
-        (newDir == DIR_DOWN && currentDir != DIR_UP) ||
-        (newDir == DIR_LEFT && currentDir != DIR_RIGHT) ||
-        (newDir == DIR_RIGHT && currentDir != DIR_LEFT)) {
+    if (dirChangedThisTick) return;
+
+    Direction_t physicalDir = game->snake.dir;
+    if ((newDir == DIR_UP && physicalDir != DIR_DOWN) ||
+        (newDir == DIR_DOWN && physicalDir != DIR_UP) ||
+        (newDir == DIR_LEFT && physicalDir != DIR_RIGHT) ||
+        (newDir == DIR_RIGHT && physicalDir != DIR_LEFT)) {
         game->snake.nextDir = newDir;
+        dirChangedThisTick = true;
     }
 }
 
+/**
+ * Toggles between RUNNING and PAUSED game states.
+ */
 void Snake_TogglePause(Game_t *game) {
     if (game == NULL) return;
     if (game->state == GAME_STATE_RUNNING) game->state = GAME_STATE_PAUSED;
     else if (game->state == GAME_STATE_PAUSED) game->state = GAME_STATE_RUNNING;
 }
 
+/**
+ * Advances stage transition timer and resumes gameplay when time elapses.
+ */
 void Snake_AdvanceTransition(Game_t *game, uint16_t elapsedMs) {
     if (game == NULL || game->state != GAME_STATE_LEVEL_TRANSITION) return;
     if (elapsedMs >= game->transitionRemainingMs) {
@@ -457,6 +555,7 @@ void Snake_AdvanceTransition(Game_t *game, uint16_t elapsedMs) {
         game->transitionRemainingMs -= elapsedMs;
     }
 }
+
 
 static bool spawn_food_at(Game_t *game, uint8_t foodIndex) {
     uint32_t start = (uint32_t)rand() % MAX_GRID_CELLS;
@@ -491,6 +590,7 @@ void Snake_RespawnFood(Game_t *game) {
     }
 }
 
+
 static Direction_t enemy_direction(const Game_t *game, uint8_t enemyIndex) {
     const Snake_t *enemy = &game->enemies[enemyIndex];
     Point_t head = enemy->body[0];
@@ -517,6 +617,7 @@ static Direction_t enemy_direction(const Game_t *game, uint8_t enemyIndex) {
     return best;
 }
 
+
 static bool move_enemy(Game_t *game, uint8_t enemyIndex) {
     Snake_t *enemy = &game->enemies[enemyIndex];
     if (enemy->length == 0U) return false;
@@ -540,10 +641,26 @@ static bool move_enemy(Game_t *game, uint8_t enemyIndex) {
     return same_point(head, game->snake.body[0]);
 }
 
+/**
+ * Main game step logic: advances player, processes collisions, food, stage transitions.
+ */
 bool Snake_Update(Game_t *game) {
     if (game == NULL || game->state != GAME_STATE_RUNNING) return false;
+
+    // 1. Compute new head coordinate based on latched direction
     game->snake.dir = game->snake.nextDir;
+    dirChangedThisTick = false;
     Point_t newHead = next_point(game->snake.body[0], game->snake.dir);
+
+    // In Easter Egg mode, wrap around boundaries so the snake never dies
+    if (game->easterEggUnlocked) {
+        if (newHead.x < 0) newHead.x = GRID_WIDTH - 1;
+        else if (newHead.x >= GRID_WIDTH) newHead.x = 0;
+        if (newHead.y < 0) newHead.y = GRID_HEIGHT - 1;
+        else if (newHead.y >= GRID_HEIGHT) newHead.y = 0;
+    }
+
+    // 2. Check food collision
     bool ateFood = false;
     uint8_t eatenFoodIndex = 0U;
     for (uint8_t foodIndex = 0U; foodIndex < game->foodCount; foodIndex++) {
@@ -558,23 +675,39 @@ bool Snake_Update(Game_t *game) {
     uint16_t collisionLength = growSnake ? game->snake.length : game->snake.length - 1U;
     int8_t eatenEnemyIndex = game->easterEggUnlocked ? enemy_at(game, newHead) : -1;
 
-    if (!valid_point(newHead) ||
-        (!game->easterEggUnlocked && Snake_IsObstacle(game, newHead)) ||
-        snake_contains(&game->snake, newHead, collisionLength) ||
-        (!game->easterEggUnlocked && occupied_by_enemy(game, newHead))) {
-        set_game_over(game);
-        return false;
-    }
-    if (growSnake && game->snake.length == MAX_SNAKE_LENGTH) {
-        set_game_over(game);
-        return false;
-    }
     bool stageChanged = false;
-    bool easterEggTriggered = false;
+
+    // 3. Check Easter Egg ("CHRY" entering far-right corner) BEFORE collision checks
+    if (is_chry(game) && is_right_corner(newHead) && game->stage < MAX_GAME_STAGE) {
+        game->score += FOOD_SCORE_POINTS;
+        game->stage++;
+        game->easterEggUnlocked = true;
+        stageChanged = true;
+    }
+
+    // 4. Collision checks: boundaries, maze obstacles, self body, and enemies
+    // In Easter Egg mode, player is immortal (god mode): ignore boundaries, obstacles, self-body & enemies
+    if (!game->easterEggUnlocked) {
+        if (!valid_point(newHead) ||
+            Snake_IsObstacle(game, newHead) ||
+            snake_contains(&game->snake, newHead, collisionLength) ||
+            occupied_by_enemy(game, newHead)) {
+            set_game_over(game);
+            return false;
+        }
+        if (growSnake && game->snake.length == MAX_SNAKE_LENGTH) {
+            set_game_over(game);
+            return false;
+        }
+    }
+
+    // 5. Process eaten enemy bonus (Easter Egg mode)
     if (eatenEnemyIndex >= 0) {
         game->score += (uint32_t)game->enemies[(uint8_t)eatenEnemyIndex].length * FOOD_SCORE_POINTS;
         game->enemies[(uint8_t)eatenEnemyIndex].length = 0U;
     }
+
+    // 6. Process food score update, growth and normal stage escalation
     if (ateFood) {
         game->score += FOOD_SCORE_POINTS;
         game->foodsEaten++;
@@ -591,32 +724,19 @@ bool Snake_Update(Game_t *game) {
             stageChanged = true;
         }
     }
-    if (!stageChanged && is_chry(game) && is_right_corner(newHead) &&
-        game->stage < MAX_GAME_STAGE) {
-        game->score += FOOD_SCORE_POINTS;
-        game->stage++;
-        game->easterEggUnlocked = true;
-        easterEggTriggered = true;
-        stageChanged = true;
-    }
+
     for (uint16_t i = game->snake.length; i > 1U; i--) {
         game->snake.body[i - 1U] = game->snake.body[i - 2U];
     }
     game->snake.body[0] = newHead;
 
+    // 7. Handle stage transition setup or victory check
     if (stageChanged) {
         if (game->stage >= MAX_GAME_STAGE) {
             game->easterEggUnlocked = true;
             set_victory(game);
             game->transitionRemainingMs = 0U;
             return true;
-        }
-        if (easterEggTriggered) {
-            game->snake.dir = DIR_RIGHT;
-            game->snake.nextDir = DIR_RIGHT;
-            game->snake.body[0] = (Point_t){2, GRID_HEIGHT - 1};
-            game->snake.body[1] = (Point_t){1, GRID_HEIGHT - 1};
-            game->snake.body[2] = (Point_t){0, GRID_HEIGHT - 1};
         }
         update_level_for_stage(game);
         init_enemies(game);
@@ -631,19 +751,45 @@ bool Snake_Update(Game_t *game) {
     if (ateFood && !spawn_food_at(game, eatenFoodIndex)) set_game_over(game);
     if (game->state == GAME_STATE_GAMEOVER) return false;
     if (game->state == GAME_STATE_LEVEL_TRANSITION) return true;
-    for (uint8_t enemyIndex = 0U; enemyIndex < game->enemyCount; enemyIndex++) {
-        if (move_enemy(game, enemyIndex)) {
-            set_game_over(game);
-            return false;
+
+    // 9. AI enemy movement 
+    // Easy / Medium: moves once every 3 player ticks 
+    // Hard: moves once every 2 player ticks 
+    static uint8_t enemy_tick_counter = 0U;
+    enemy_tick_counter++;
+
+    bool move_enemies_now = false;
+    if (game->level == LEVEL_HARD) {
+        if ((enemy_tick_counter % 2U) == 0U) {
+            move_enemies_now = true;
+        }
+    } else {
+        if ((enemy_tick_counter % 3U) == 0U) {
+            move_enemies_now = true;
+        }
+    }
+
+    if (move_enemies_now) {
+        for (uint8_t enemyIndex = 0U; enemyIndex < game->enemyCount; enemyIndex++) {
+            if (move_enemy(game, enemyIndex)) {
+                set_game_over(game);
+                return false;
+            }
         }
     }
     return true;
 }
 
+/**
+ *  Retrieves the active move tick interval 
+*/
 uint16_t Snake_GetMoveIntervalMs(const Game_t *game) {
     return game == NULL ? INITIAL_MOVE_INTERVAL_MS : game->moveIntervalMs;
 }
 
+/**
+ * Retrieves the current stage level number.
+ */
 uint16_t Snake_GetStage(const Game_t *game) {
     return game == NULL ? 1U : game->stage;
 }

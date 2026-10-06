@@ -80,14 +80,12 @@ void Enter_StopMode_Process(void);
 #define BTN_ON_OFF_EXTI_IRQn EXTI3_IRQn
 #define TOUCH_CS_PIN_Pin GPIO_PIN_4
 #define TOUCH_CS_PIN_GPIO_Port GPIOA
-#define ACC_CS_PIN_Pin GPIO_PIN_5
-#define ACC_CS_PIN_GPIO_Port GPIOA
 #define ON_LED_Pin GPIO_PIN_6
 #define ON_LED_GPIO_Port GPIOA
 #define ERROR_LED_Pin GPIO_PIN_7
 #define ERROR_LED_GPIO_Port GPIOA
-#define FLAS_CS_PIN_Pin GPIO_PIN_4
-#define FLAS_CS_PIN_GPIO_Port GPIOC
+#define FLAS_CS_PIN_Pin GPIO_PIN_0
+#define FLAS_CS_PIN_GPIO_Port GPIOB
 #define TOUCH_INPUT_PIN_Pin GPIO_PIN_6
 #define TOUCH_INPUT_PIN_GPIO_Port GPIOD
 #define TOUCH_INPUT_PIN_EXTI_IRQn EXTI9_5_IRQn

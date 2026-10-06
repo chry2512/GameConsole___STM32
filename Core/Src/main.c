@@ -21,12 +21,15 @@
 #include "cmsis_os.h"
 #include "adc.h"
 #include "dma.h"
+#include "spi.h"
+#include "usart.h"
 #include "gpio.h"
 #include "fsmc.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include <stdio.h>
+#include "lcd.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -94,7 +97,14 @@ int main(void)
   MX_DMA_Init();
   MX_ADC1_Init();
   MX_FSMC_Init();
+  MX_SPI1_Init();
+  MX_USART1_UART_Init();
+
   /* USER CODE BEGIN 2 */
+  printf("\r\n========================================\r\n");
+  printf("  CUBENIRO GAME CONSOLE STM32F407\r\n");
+  printf("  Inizializzazione completata!\r\n");
+  printf("========================================\r\n");
   /* USER CODE END 2 */
 
   /* Init scheduler */
@@ -112,7 +122,6 @@ int main(void)
   {
     Error_Handler();
     /* USER CODE END WHILE */
-
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
@@ -167,14 +176,28 @@ void SystemClock_Config(void)
 /* USER CODE BEGIN 4 */
 void Enter_StopMode_Process(void)
 {
-  HAL_GPIO_WritePin(ON_LED_GPIO_Port, ON_LED_Pin, LED_OFF);
-  HAL_GPIO_WritePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin, LED_OFF);
+  printf("[POWER] Tasto K1 premuto -> Entrata in STOP MODE (Standby)\r\n");
+  printf("[POWER] Spegnimento LED e display LCD (Display OFF + Sleep In)...\r\n");
+  HAL_GPIO_WritePin(ON_LED_GPIO_Port, ON_LED_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin, GPIO_PIN_SET);
+  
+
+  
+  LCD_Sleep();
+  
   HAL_SuspendTick();
   HAL_PWR_EnterSTOPMode(PWR_MAINREGULATOR_ON, PWR_STOPENTRY_WFI);
+  
   SystemClock_Config();
   HAL_ResumeTick();
-  HAL_GPIO_WritePin(ON_LED_GPIO_Port, ON_LED_Pin, LED_ON);
-  HAL_GPIO_WritePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin, LED_ON);
+  
+
+
+  LCD_Wakeup();
+  
+  printf("[POWER] Risveglio da STOP MODE -> Ripristino periferiche, clock e display LCD (LEDs ON)\r\n");
+  HAL_GPIO_WritePin(ON_LED_GPIO_Port, ON_LED_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin, GPIO_PIN_RESET);
 }
 
 /* USER CODE END 4 */
@@ -208,12 +231,12 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
-  /* User can add his own implementation to report the HAL error return state */
   __disable_irq();
   while (1)
   {
-    HAL_GPIO_TogglePin(ON_LED_GPIO_Port, ON_LED_Pin);
     HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
+    printf("\r\n[ERROR] [CRITICO] ERRORE DI SISTEMA RILEVATO! (Error_Handler attivato)\r\n");
+    printf("[ERROR] Avvio segnalazione allarme visivo su LED ERROR...\r\n");
     for (volatile uint32_t i = 0; i < 400000; i++) { }
   }
   /* USER CODE END Error_Handler_Debug */

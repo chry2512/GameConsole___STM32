@@ -47,6 +47,9 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Core/Src/console.c
     Core/Src/lcd.c
     Core/Src/snake.c
+    Core/Src/touch.c
+    Core/Src/external_flash.c
+    Core/Src/assets_data.c
 )
 
 # Add include paths

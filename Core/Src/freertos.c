@@ -29,6 +29,9 @@
 #include "console.h"
 #include "gpio.h"
 #include "lcd.h"
+#include "touch.h"
+#include "external_flash.h"
+#include <stdio.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -47,13 +50,18 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+
 /* USER CODE BEGIN Variables */
 static Game_t game;
 static Console_t console;
+
+// Mutex protecting game and console data across tasks
 osMutexId_t gameMutexHandle;
 const osMutexAttr_t gameMutex_attributes = {
   .name = "gameMutex"
 };
+
+// Power management task and active low-power state flag
 static volatile uint8_t stopModeActive = 0U;
 osThreadId_t PowerManagerTaskHandle;
 const osThreadAttr_t PowerManagerTask_attributes = {
@@ -62,6 +70,7 @@ const osThreadAttr_t PowerManagerTask_attributes = {
   .priority = (osPriority_t) osPriorityAboveNormal,
 };
 /* USER CODE END Variables */
+
 /* Definitions for inputTask */
 osThreadId_t inputTaskHandle;
 const osThreadAttr_t inputTask_attributes = {
@@ -107,113 +116,11 @@ const osEventFlagsAttr_t gameEvents_attributes = {
 };
 
 /* Private function prototypes -----------------------------------------------*/
+
 /* USER CODE BEGIN FunctionPrototypes */
 void StartPowerManagerTask(void *argument);
-
-static void handle_joystick_button(void)
-{
-  switch (Console_GetState(&console)) {
-    case CONSOLE_STATE_OFF:
-      Console_HandleEvent(&console, &game, CONSOLE_EVENT_POWER, '\0');
-      break;
-    case CONSOLE_STATE_START:
-      Console_HandleEvent(&console, &game, CONSOLE_EVENT_X, '\0');
-      break;
-    case CONSOLE_STATE_NAME:
-      Console_HandleEvent(&console, &game, CONSOLE_EVENT_BUTTON_SELECT, '\0');
-      break;
-    case CONSOLE_STATE_DIFFICULTY:
-      Console_HandleEvent(&console, &game, CONSOLE_EVENT_BUTTON_SELECT, '\0');
-      break;
-    case CONSOLE_STATE_GAME:
-      Console_HandleEvent(&console, &game, CONSOLE_EVENT_BUTTON_SELECT, '\0');
-      break;
-    case CONSOLE_STATE_LEADERBOARD:
-      Console_HandleEvent(&console, &game, CONSOLE_EVENT_BUTTON_SELECT, '\0');
-      break;
-    default:
-      break;
-  }
-}
-
-static void handle_joystick_direction(const JoystickData_t *input)
-{
-  if (input == NULL) return;
-  uint16_t x = input->x;
-  uint16_t y = input->y;
-
-  // Calcola lo scostamento dal centro calibrato (2048 su ADC a 12-bit)
-  int32_t dx = (int32_t)x - 2048;
-  int32_t dy = (int32_t)y - 2048;
-
-  int32_t abs_dx = (dx >= 0) ? dx : -dx;
-  int32_t abs_dy = (dy >= 0) ? dy : -dy;
-
-  static uint8_t menu_held = 0U;
-  ConsoleState_t cState = Console_GetState(&console);
-
-  #define JOY_SECTOR_DEADZONE 350
-  if (abs_dx < JOY_SECTOR_DEADZONE && abs_dy < JOY_SECTOR_DEADZONE) {
-    // La levetta e' al centro (neutra): sblocca l'edge-trigger per il prossimo movimento del menu
-    menu_held = 0U;
-    return;
-  }
-
-  // Partizione in 4 settori a 90 gradi: l'asse con magnitudine maggiore stabilisce la direzione
-  uint8_t left_deflected  = 0U;
-  uint8_t right_deflected = 0U;
-  uint8_t up_deflected    = 0U;
-  uint8_t down_deflected  = 0U;
-
-  if (abs_dx >= abs_dy) {
-    // Settore Orizzontale (Left o Right)
-    if (dx > 0) {
-      left_deflected = 1U;
-    } else {
-      right_deflected = 1U;
-    }
-  } else {
-    // Settore Verticale (Up o Down)
-    if (dy > 0) {
-      down_deflected = 1U;
-    } else {
-      up_deflected = 1U;
-    }
-  }
-
-  // Per schermate a menu / tastiera (NAME, DIFFICULTY, LEADERBOARD, PAUSED, GAMEOVER), usiamo edge-trigger per movimento passo-passo
-  if (cState == CONSOLE_STATE_NAME || 
-      cState == CONSOLE_STATE_DIFFICULTY || 
-      cState == CONSOLE_STATE_LEADERBOARD ||
-      (cState == CONSOLE_STATE_GAME && (game.state == GAME_STATE_PAUSED || game.state == GAME_STATE_GAMEOVER))) {
-
-    if (menu_held == 0U) {
-      if (up_deflected != 0U) {
-        Console_HandleEvent(&console, &game, CONSOLE_EVENT_UP, '\0');
-        menu_held = 1U;
-      } else if (down_deflected != 0U) {
-        Console_HandleEvent(&console, &game, CONSOLE_EVENT_DOWN, '\0');
-        menu_held = 1U;
-      } else if (left_deflected != 0U) {
-        Console_HandleEvent(&console, &game, CONSOLE_EVENT_LEFT, '\0');
-        menu_held = 1U;
-      } else if (right_deflected != 0U) {
-        Console_HandleEvent(&console, &game, CONSOLE_EVENT_RIGHT, '\0');
-        menu_held = 1U;
-      }
-    }
-    return;
-  }
-
-  if (cState != CONSOLE_STATE_GAME) return;
-
-  // Durante il gioco continuo a Snake:
-  if (up_deflected != 0U) Console_HandleEvent(&console, &game, CONSOLE_EVENT_UP, '\0');
-  else if (down_deflected != 0U) Console_HandleEvent(&console, &game, CONSOLE_EVENT_DOWN, '\0');
-  else if (left_deflected != 0U) Console_HandleEvent(&console, &game, CONSOLE_EVENT_LEFT, '\0');
-  else if (right_deflected != 0U) Console_HandleEvent(&console, &game, CONSOLE_EVENT_RIGHT, '\0');
-}
-
+static void handle_joystick_direction(const JoystickData_t *input);
+static void handle_joystick_button(void);
 /* USER CODE END FunctionPrototypes */
 
 void StartInputTask(void *argument);
@@ -333,7 +240,8 @@ void StartGameLogicTask(void *argument)
   {
     if (osMutexAcquire(gameMutexHandle, osWaitForever) == osOK)
     {
-      // 1. Process all pending joystick inputs
+      // 1. JOYSTICK INPUT
+
       JoystickData_t input = {0};
       while (osMessageQueueGet(joystickQueueHandle, &input, NULL, 0U) == osOK) {
         if (input.buttonPressed != 0U) {
@@ -343,19 +251,48 @@ void StartGameLogicTask(void *argument)
         }
       }
 
-      // 2. Update snake position if game is currently running
+      // 2. CONSOLE STATE MACHINE
+
+      static ConsoleState_t last_logged_console_state = (ConsoleState_t)-1;
+      ConsoleState_t currentState = Console_GetState(&console);
+      if (currentState != last_logged_console_state) {
+        const char *stateNames[] = {"OFF", "LOAD", "START", "NAME", "DIFFICULTY", "GAME", "LEADERBOARD"};
+        printf("[CONSOLE] State changed to: %s\r\n", 
+               (currentState <= CONSOLE_STATE_LEADERBOARD) ? stateNames[currentState] : "UNKNOWN");
+        last_logged_console_state = currentState;
+      }
+
+     
+      static uint32_t load_start_tick = 0U;
+      static ConsoleState_t prev_check_state = CONSOLE_STATE_OFF;
+      if (currentState == CONSOLE_STATE_LOAD) {
+        if (prev_check_state != CONSOLE_STATE_LOAD) {
+          load_start_tick = osKernelGetTickCount();
+        } else if ((osKernelGetTickCount() - load_start_tick) >= 2500U) {
+          printf("[LOAD] Timeout 2.5s completato -> passaggio automatico a START\r\n");
+          Console_HandleEvent(&console, &game, CONSOLE_EVENT_BUTTON_SELECT, '\0');
+        }
+      }
+      prev_check_state = currentState;
       uint32_t now = osKernelGetTickCount();
+      static uint32_t last_logged_score = 0U;
+      static uint16_t last_logged_stage = 0U;
       if (Console_GetState(&console) == CONSOLE_STATE_GAME && game.state == GAME_STATE_RUNNING) {
         uint16_t moveInterval = Snake_GetMoveIntervalMs(&game);
         if (now - lastUpdate >= moveInterval) {
           Snake_Update(&game);
           lastUpdate = now;
         }
+        if (game.score != last_logged_score || game.stage != last_logged_stage) {
+          printf("[SNAKE] Score: %lu | Stage: %u | Length: %u\r\n", 
+                 (unsigned long)game.score, (unsigned int)game.stage, (unsigned int)game.snake.length);
+          last_logged_score = game.score;
+          last_logged_stage = game.stage;
+        }
       } else {
         lastUpdate = now;
       }
 
-      // 3. Advance level transition timer if active
       if (game.state == GAME_STATE_LEVEL_TRANSITION) {
         Snake_AdvanceTransition(&game, (uint16_t)period);
       }
@@ -380,19 +317,20 @@ void StartRenderTask(void *argument)
   /* USER CODE BEGIN StartRenderTask */
   (void) argument;
   
-  // 1. Inizializzazione Hardware Display
+  // 1. Setup Hardware Display/Flash SPI
   LCD_Init();
+  ExternalFlash_Init();
+  ExternalFlash_EnsureAssetsProgrammed();
 
   /* Infinite loop */
   while (1)
   {
-    // Proteggiamo l'accesso alle risorse condivise con il Mutex
     if (osMutexAcquire(gameMutexHandle, osWaitForever) == osOK) {
       LCD_Render(&game, &console);  
       osMutexRelease(gameMutexHandle);
     }
 
-    osDelay(RENDER_TASK_PERIOD); // Circa 30 FPS stabili
+    osDelay(RENDER_TASK_PERIOD); 
   }
   /* USER CODE END StartRenderTask */
 }
@@ -426,6 +364,8 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
   }
 }
 
+//ON-OFF BUTTON TASK
+
 void StartPowerManagerTask(void *argument)
 {
   (void) argument;
@@ -443,5 +383,133 @@ void StartPowerManagerTask(void *argument)
   }
 }
 
+//HANDLE JOYSTICK INPUTS
+
+static void handle_joystick_button(void)
+{
+  const char *stateNames[] = {"OFF", "LOAD", "START", "NAME", "DIFFICULTY", "GAME", "LEADERBOARD"};
+  ConsoleState_t st = Console_GetState(&console);
+  const char *stName = (st <= CONSOLE_STATE_LEADERBOARD) ? stateNames[st] : "UNKNOWN";
+  printf("[INPUT] JOYSTICK BTN X premuto (Stato: %s)\r\n", stName);
+
+  switch (st) {
+    case CONSOLE_STATE_OFF:
+      Console_HandleEvent(&console, &game, CONSOLE_EVENT_POWER, '\0');
+      break;
+    case CONSOLE_STATE_LOAD:
+      Console_HandleEvent(&console, &game, CONSOLE_EVENT_BUTTON_SELECT, '\0');
+      break;
+    case CONSOLE_STATE_START:
+      Console_HandleEvent(&console, &game, CONSOLE_EVENT_X, '\0');
+      break;
+    case CONSOLE_STATE_NAME:
+      Console_HandleEvent(&console, &game, CONSOLE_EVENT_BUTTON_SELECT, '\0');
+      break;
+    case CONSOLE_STATE_DIFFICULTY:
+      Console_HandleEvent(&console, &game, CONSOLE_EVENT_BUTTON_SELECT, '\0');
+      break;
+    case CONSOLE_STATE_GAME:
+      Console_HandleEvent(&console, &game, CONSOLE_EVENT_BUTTON_SELECT, '\0');
+      break;
+    case CONSOLE_STATE_LEADERBOARD:
+      Console_HandleEvent(&console, &game, CONSOLE_EVENT_BUTTON_SELECT, '\0');
+      break;
+    default:
+      break;
+  }
+}
+
+static void handle_joystick_direction(const JoystickData_t *input)
+{
+  if (input == NULL) return;
+  uint16_t x = input->x;
+  uint16_t y = input->y;
+
+ 
+  int32_t dx = (int32_t)x - 2048;
+  int32_t dy = (int32_t)y - 2048;
+
+  int32_t abs_dx = (dx >= 0) ? dx : -dx;
+  int32_t abs_dy = (dy >= 0) ? dy : -dy;
+
+  static uint8_t menu_held = 0U;
+  static int8_t last_logged_dir = -1; 
+  ConsoleState_t cState = Console_GetState(&console);
+
+  #define JOY_SECTOR_DEADZONE 350
+  if (abs_dx < JOY_SECTOR_DEADZONE && abs_dy < JOY_SECTOR_DEADZONE) {
+
+    menu_held = 0U;
+    last_logged_dir = -1;
+    return;
+  }
+
+
+  uint8_t left_deflected  = 0U;
+  uint8_t right_deflected = 0U;
+  uint8_t up_deflected    = 0U;
+  uint8_t down_deflected  = 0U;
+  int8_t current_dir = -1;
+
+  if (abs_dx >= abs_dy) {
+    //Left o Right
+    if (dx > 0) {
+      left_deflected = 1U;
+      current_dir = 2; // LEFT
+    } else {
+      right_deflected = 1U;
+      current_dir = 3; // RIGHT
+    }
+  } else {
+    // Up o Down
+    if (dy > 0) {
+      down_deflected = 1U;
+      current_dir = 1; // DOWN
+    } else {
+      up_deflected = 1U;
+      current_dir = 0; // UP
+    }
+  }
+
+  // LOG
+  if (current_dir != last_logged_dir) {
+    const char *dirNames[] = {"UP", "DOWN", "LEFT", "RIGHT"};
+    if (current_dir >= 0 && current_dir < 4) {
+      printf("[INPUT] JOYSTICK DIR: %s\r\n", dirNames[current_dir]);
+    }
+    last_logged_dir = current_dir;
+  }
+
+  if (cState == CONSOLE_STATE_NAME || 
+      cState == CONSOLE_STATE_DIFFICULTY || 
+      cState == CONSOLE_STATE_LEADERBOARD ||
+      (cState == CONSOLE_STATE_GAME && (game.state == GAME_STATE_PAUSED || game.state == GAME_STATE_GAMEOVER))) {
+
+    if (menu_held == 0U) {
+      if (up_deflected != 0U) {
+        Console_HandleEvent(&console, &game, CONSOLE_EVENT_UP, '\0');
+        menu_held = 1U;
+      } else if (down_deflected != 0U) {
+        Console_HandleEvent(&console, &game, CONSOLE_EVENT_DOWN, '\0');
+        menu_held = 1U;
+      } else if (left_deflected != 0U) {
+        Console_HandleEvent(&console, &game, CONSOLE_EVENT_LEFT, '\0');
+        menu_held = 1U;
+      } else if (right_deflected != 0U) {
+        Console_HandleEvent(&console, &game, CONSOLE_EVENT_RIGHT, '\0');
+        menu_held = 1U;
+      }
+    }
+    return;
+  }
+
+  if (cState != CONSOLE_STATE_GAME) return;
+
+ 
+  if (up_deflected != 0U) Console_HandleEvent(&console, &game, CONSOLE_EVENT_UP, '\0');
+  else if (down_deflected != 0U) Console_HandleEvent(&console, &game, CONSOLE_EVENT_DOWN, '\0');
+  else if (left_deflected != 0U) Console_HandleEvent(&console, &game, CONSOLE_EVENT_LEFT, '\0');
+  else if (right_deflected != 0U) Console_HandleEvent(&console, &game, CONSOLE_EVENT_RIGHT, '\0');
+}
 /* USER CODE END Application */
 

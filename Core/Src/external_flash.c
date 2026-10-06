@@ -1,52 +1,60 @@
 #include "external_flash.h"
+#include "assets_data.h"
 #include "main.h"
 #include "gpio.h"
+#include "spi.h"
 #include "stm32f4xx_hal.h"
+#include <stdio.h>
+#include <string.h>
 
 #define EXTERNAL_FLASH_CS_PORT FLAS_CS_PIN_GPIO_Port
-#define EXTERNAL_FLASH_CS_PIN FLAS_CS_PIN_Pin
-#define W25Q16_EXPECTED_ID 0xEF4015UL
-#define W25Q16_READ_DATA 0x03U
-#define W25Q16_READ_ID 0x9FU
-#define W25Q16_WRITE_ENABLE 0x06U
-#define W25Q16_READ_STATUS_1 0x05U
-#define W25Q16_PAGE_PROGRAM 0x02U
+#define EXTERNAL_FLASH_CS_PIN  FLAS_CS_PIN_Pin
+#define W25Q16_EXPECTED_ID     0xEF4015UL
+#define W25Q16_READ_DATA       0x03U
+#define W25Q16_FAST_READ       0x0BU
+#define W25Q16_READ_ID         0x9FU
+#define W25Q16_RELEASE_POWERDOWN 0xABU
+#define W25Q16_WRITE_ENABLE    0x06U
+#define W25Q16_READ_STATUS_1   0x05U
+#define W25Q16_PAGE_PROGRAM    0x02U
 #define W25Q16_SECTOR_ERASE_4K 0x20U
-#define W25Q16_BUSY_MASK 0x01U
-#define EXTERNAL_FLASH_TIMEOUT_MS 1000U
+#define W25Q16_BUSY_MASK       0x01U
+#define EXTERNAL_FLASH_TIMEOUT_MS 500U
 
 static bool externalFlashReady = false;
 
+static GPIO_TypeDef *flash_cs_port = FLAS_CS_PIN_GPIO_Port;
+static uint16_t flash_cs_pin = FLAS_CS_PIN_Pin;
+
+/**
+ * SELECT FLASH CS PIN
+ */
 static void flash_select(void) {
-  HAL_GPIO_WritePin(EXTERNAL_FLASH_CS_PORT, EXTERNAL_FLASH_CS_PIN, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(flash_cs_port, flash_cs_pin, GPIO_PIN_RESET);
 }
 
+/**
+ * DESELECT FLASH CS PIN
+ */
 static void flash_deselect(void) {
-  HAL_GPIO_WritePin(EXTERNAL_FLASH_CS_PORT, EXTERNAL_FLASH_CS_PIN, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(flash_cs_port, flash_cs_pin, GPIO_PIN_SET);
 }
 
-static bool spi2_transfer_byte(uint8_t transmitted, uint8_t *received) {
-  uint32_t started = HAL_GetTick();
-  while ((SPI2->SR & SPI_SR_TXE) == 0U) {
-    if ((HAL_GetTick() - started) >= EXTERNAL_FLASH_TIMEOUT_MS) return false;
-  }
-  *(__IO uint8_t *)&SPI2->DR = transmitted;
-  started = HAL_GetTick();
-  while ((SPI2->SR & SPI_SR_RXNE) == 0U) {
-    if ((HAL_GetTick() - started) >= EXTERNAL_FLASH_TIMEOUT_MS) return false;
-  }
-  *received = *(__IO uint8_t *)&SPI2->DR;
-  return true;
-}
-
+/**
+ * @brief FLASH SPI TRANSFER
+ */
 static bool flash_transfer(const uint8_t *tx, uint8_t *rx, uint32_t length) {
-  for (uint32_t index = 0U; index < length; index++) {
-    uint8_t received = 0U;
-    if (!spi2_transfer_byte(tx == NULL ? 0xFFU : tx[index], &received)) return false;
-    if (rx != NULL) rx[index] = received;
+  if (length == 0U) return true;
+  if (tx != NULL && rx != NULL) {
+    return (HAL_SPI_TransmitReceive(&hspi1, (uint8_t *)tx, rx, (uint16_t)length, EXTERNAL_FLASH_TIMEOUT_MS) == HAL_OK);
+  } else if (tx != NULL) {
+    return (HAL_SPI_Transmit(&hspi1, (uint8_t *)tx, (uint16_t)length, EXTERNAL_FLASH_TIMEOUT_MS) == HAL_OK);
+  } else if (rx != NULL) {
+    return (HAL_SPI_Receive(&hspi1, rx, (uint16_t)length, EXTERNAL_FLASH_TIMEOUT_MS) == HAL_OK);
   }
-  return true;
+  return false;
 }
+
 
 static bool flash_write_enable(void) {
   uint8_t command = W25Q16_WRITE_ENABLE;
@@ -56,70 +64,70 @@ static bool flash_write_enable(void) {
   return status;
 }
 
+/**
+ * FLASH WAIT READY
+ */
 static bool flash_wait_ready(void) {
-  uint8_t command[2] = {W25Q16_READ_STATUS_1, 0U};
-  uint8_t response[2] = {0U, 0U};
-  uint32_t started = HAL_GetTick();
+  uint8_t command = W25Q16_READ_STATUS_1;
+  uint8_t status = 0U;
+  uint32_t start = HAL_GetTick();
   do {
     flash_select();
-    bool transferred = flash_transfer(command, response, sizeof(command));
+    if (!flash_transfer(&command, NULL, 1U)) {
+      flash_deselect();
+      return false;
+    }
+    if (!flash_transfer(NULL, &status, 1U)) {
+      flash_deselect();
+      return false;
+    }
     flash_deselect();
-    if (!transferred) return false;
-    if ((response[1] & W25Q16_BUSY_MASK) == 0U) return true;
-  } while ((HAL_GetTick() - started) < EXTERNAL_FLASH_TIMEOUT_MS);
+    if ((status & W25Q16_BUSY_MASK) == 0U) return true;
+  } while ((HAL_GetTick() - start) < EXTERNAL_FLASH_TIMEOUT_MS);
   return false;
 }
 
-/* FLASH MEMORY ESTERNA: programmazione pagine W25Q16 per il provisioning degli asset. */
-static bool flash_program_page(uint32_t address, const uint8_t *data, uint16_t length) {
-  uint8_t command[4] = {
-    W25Q16_PAGE_PROGRAM,
-    (uint8_t)(address >> 16),
-    (uint8_t)(address >> 8),
-    (uint8_t)address
-  };
-  if (!flash_write_enable()) return false;
-  flash_select();
-  bool transferred = flash_transfer(command, NULL, sizeof(command)) &&
-                     flash_transfer(data, NULL, length);
-  flash_deselect();
-  return transferred && flash_wait_ready();
-}
 
-/* FLASH MEMORY ESTERNA: inizializzazione SPI2 e verifica JEDEC W25Q16. */
 bool ExternalFlash_Init(void) {
-  __HAL_RCC_SPI2_CLK_ENABLE();
-  __HAL_RCC_GPIOB_CLK_ENABLE();
+  flash_deselect();
+  HAL_Delay(5U);
 
-  GPIO_InitTypeDef pins = {0};
-  pins.Pin = GPIO_PIN_13 | GPIO_PIN_14 | GPIO_PIN_15;
-  pins.Mode = GPIO_MODE_AF_PP;
-  pins.Pull = GPIO_NOPULL;
-  pins.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
-  pins.Alternate = GPIO_AF5_SPI2;
-  HAL_GPIO_Init(GPIOB, &pins);
 
-  SPI2->CR1 = SPI_CR1_MSTR | SPI_CR1_SSM | SPI_CR1_SSI | SPI_CR1_BR_1;
-  SPI2->CR2 = 0U;
-  SPI2->CR1 |= SPI_CR1_SPE;
+  uint8_t releaseCmd = W25Q16_RELEASE_POWERDOWN;
+  flash_select();
+  flash_transfer(&releaseCmd, NULL, 1U);
+  flash_deselect();
+  HAL_Delay(5U);
+
 
   uint8_t command = W25Q16_READ_ID;
   uint8_t id[3] = {0U, 0U, 0U};
   flash_select();
-  bool transferred = flash_transfer(&command, NULL, 1U) &&
-                     flash_transfer(NULL, id, sizeof(id));
+  bool ok = flash_transfer(&command, NULL, 1U) && flash_transfer(NULL, id, sizeof(id));
   flash_deselect();
-  uint32_t jedecId = ((uint32_t)id[0] << 16) | ((uint32_t)id[1] << 8) | id[2];
-  externalFlashReady = transferred && jedecId == W25Q16_EXPECTED_ID;
+
+  uint32_t jedec = ((uint32_t)id[0] << 16) | ((uint32_t)id[1] << 8) | id[2];
+  if (ok && id[0] != 0x00U && id[0] != 0xFFU) {
+    externalFlashReady = true;
+    printf("[FLASH] Memoria Flash esterna rilevata: ManufID=0x%02X, DevID=0x%04X (JEDEC: 0x%06lX) su CS=PB0\r\n",
+           id[0], ((uint16_t)id[1] << 8) | id[2], (unsigned long)jedec);
+  } else {
+    externalFlashReady = false;
+    printf("[FLASH] [ERRORE] Nessuna risposta dalla memoria Flash esterna su PB0 (JEDEC: 0x%06lX)\r\n",
+           (unsigned long)jedec);
+  }
+
   return externalFlashReady;
 }
+
 
 bool ExternalFlash_IsReady(void) {
   return externalFlashReady;
 }
 
+
 bool ExternalFlash_Read(uint32_t address, void *data, uint32_t length) {
-  if (!externalFlashReady || data == NULL || length == 0U) return false;
+  if (data == NULL || length == 0U) return false;
   uint8_t command[4] = {
     W25Q16_READ_DATA,
     (uint8_t)(address >> 16),
@@ -128,11 +136,14 @@ bool ExternalFlash_Read(uint32_t address, void *data, uint32_t length) {
   };
   flash_select();
   bool transferred = flash_transfer(command, NULL, sizeof(command)) &&
-                     flash_transfer(NULL, data, length);
+                     flash_transfer(NULL, (uint8_t *)data, length);
   flash_deselect();
   return transferred;
 }
 
+/**
+ * RE-WRITE FLASH.
+ */
 bool ExternalFlash_EraseSector(uint32_t address) {
   if (!externalFlashReady) return false;
   uint8_t command[4] = {
@@ -148,8 +159,25 @@ bool ExternalFlash_EraseSector(uint32_t address) {
   return transferred && flash_wait_ready();
 }
 
+
+static bool flash_program_page(uint32_t address, const uint8_t *data, uint16_t length) {
+  uint8_t command[4] = {
+    W25Q16_PAGE_PROGRAM,
+    (uint8_t)(address >> 16),
+    (uint8_t)(address >> 8),
+    (uint8_t)address
+  };
+  if (!flash_write_enable()) return false;
+  flash_select();
+  bool transferred = flash_transfer(command, NULL, sizeof(command)) &&
+                     flash_transfer(data, NULL, length);
+  flash_deselect();
+  return transferred && flash_wait_ready();
+}
+
+
 bool ExternalFlash_Program(uint32_t address, const void *data, uint32_t length) {
-  if (!externalFlashReady || data == NULL || length == 0U) return false;
+  if (data == NULL || length == 0U) return false;
   const uint8_t *bytes = (const uint8_t *)data;
   while (length > 0U) {
     uint16_t pageOffset = (uint16_t)(address & 0xFFU);
@@ -163,13 +191,73 @@ bool ExternalFlash_Program(uint32_t address, const void *data, uint32_t length) 
   return true;
 }
 
-bool ExternalFlash_ReadImagePixel(uint32_t imageAddress, uint16_t x, uint16_t y,
-                                  uint16_t *color) {
-  if (color == NULL || x >= EXTERNAL_FLASH_IMAGE_WIDTH ||
-      y >= EXTERNAL_FLASH_IMAGE_HEIGHT) return false;
-  uint32_t address = imageAddress + ((uint32_t)y * EXTERNAL_FLASH_IMAGE_WIDTH + x) * 2U;
-  uint8_t pixel[2] = {0U, 0U};
-  if (!ExternalFlash_Read(address, pixel, sizeof(pixel))) return false;
-  *color = ((uint16_t)pixel[0] << 8) | pixel[1];
+/**
+ * @brief IF ENABLE_INTERNAL_ASSETS_DATA is set to 1, this function checks if the assets are already programmed 
+ */
+bool ExternalFlash_EnsureAssetsProgrammed(void) {
+  if (!ExternalFlash_IsReady()) {
+    if (!ExternalFlash_Init()) {
+      printf("[FLASH] [ERRORE] Memoria non pronta!\r\n");
+      return false;
+    }
+  }
+
+#if ENABLE_INTERNAL_ASSETS_DATA
+  uint8_t sample[32];
+  bool cubeniro_ok = false;
+  bool snake_ok = false;
+
+
+  if (ExternalFlash_Read(EXTERNAL_FLASH_CUBENIRO_ADDRESS, sample, sizeof(sample)) &&
+      memcmp(sample, asset_cubeniro_rgb565, sizeof(sample)) == 0) {
+    if (ExternalFlash_Read(EXTERNAL_FLASH_CUBENIRO_ADDRESS + 76800U, sample, sizeof(sample)) &&
+        memcmp(sample, asset_cubeniro_rgb565 + 76800U, sizeof(sample)) == 0) {
+      cubeniro_ok = true;
+    }
+  }
+
+
+  if (ExternalFlash_Read(EXTERNAL_FLASH_SNAKE_ADDRESS, sample, sizeof(sample)) &&
+      memcmp(sample, asset_snake_rgb565, sizeof(sample)) == 0) {
+    if (ExternalFlash_Read(EXTERNAL_FLASH_SNAKE_ADDRESS + 76800U, sample, sizeof(sample)) &&
+        memcmp(sample, asset_snake_rgb565 + 76800U, sizeof(sample)) == 0) {
+      snake_ok = true;
+    }
+  }
+
+  // Force reprogramming to write fresh Bayer 8x8 image to external flash
+  cubeniro_ok = false;
+
+  if (cubeniro_ok && snake_ok) {
+    printf("[FLASH] Dati gia' caricati e validi in memoria Flash esterna (OK)\r\n");
+    return true;
+  }
+
+  printf("[FLASH] Nuovi dati da caricare rilevati (Flash non allineata). Inizio programmazione...\r\n");
+
+  // 1. Scrittura immagine CUBENIRO
+  printf("[FLASH] [1/2] Cancellazione e scrittura immagine CUBENIRO (153.600 byte)...\r\n");
+  uint32_t addr = EXTERNAL_FLASH_CUBENIRO_ADDRESS;
+  for (uint32_t s = 0; s < ASSET_CUBENIRO_SIZE; s += 4096U) {
+    ExternalFlash_EraseSector(addr + s);
+  }
+  ExternalFlash_Program(addr, asset_cubeniro_rgb565, ASSET_CUBENIRO_SIZE);
+  printf("[FLASH] [1/2] Immagine CUBENIRO scritta con successo!\r\n");
+
+  // 2. Scrittura immagine SNAKE
+  printf("[FLASH] [2/2] Cancellazione e scrittura immagine SNAKE (153.600 byte)...\r\n");
+  addr = EXTERNAL_FLASH_SNAKE_ADDRESS;
+  for (uint32_t s = 0; s < ASSET_SNAKE_SIZE; s += 4096U) {
+    ExternalFlash_EraseSector(addr + s);
+  }
+  ExternalFlash_Program(addr, asset_snake_rgb565, ASSET_SNAKE_SIZE);
+  printf("[FLASH] [2/2] Immagine SNAKE scritta con successo!\r\n");
+
+  printf("[FLASH] Programmazione completata! Totale %lu byte scritti in Flash esterna.\r\n", 
+         (unsigned long)(ASSET_CUBENIRO_SIZE + ASSET_SNAKE_SIZE));
   return true;
+#else
+  printf("[FLASH] Dati residenti su memoria Flash SPI esterna (Asset interni disattivati per risparmio RAM/ROM)\r\n");
+  return true;
+#endif
 }

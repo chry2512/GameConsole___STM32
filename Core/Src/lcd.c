@@ -1,18 +1,19 @@
 #include "lcd.h"
 #include "main.h"
 #include "fsmc.h"
+#include "external_flash.h"
 #include "stm32f4xx_hal.h"
 #include <stddef.h>
 #include <string.h>
 #include <stdio.h>
 
-/* PALETTA COLORI (Formato RGB565) */
-#define COLOR_HOST_BG         0x0841U // Sfondo Scuro Matrice
-#define COLOR_HOST_GRID       0x10A2U // Linee Griglia
-#define COLOR_HOST_WALL       0x4186U // Ostacoli / Muri
-#define COLOR_HOST_FOOD       0xF800U // Cibo (Rosso)
-#define COLOR_HOST_HEAD       0x07E0U // Testa Serpente (Verde)
-#define COLOR_HOST_BODY       0x57E5U // Corpo Serpente
+/* COLOR */
+#define COLOR_HOST_BG         0x0841U 
+#define COLOR_HOST_GRID       0x10A2U 
+#define COLOR_HOST_WALL       0x4186U 
+#define COLOR_HOST_FOOD       0xF800U 
+#define COLOR_HOST_HEAD       0x07E0U 
+#define COLOR_HOST_BODY       0x57E5U 
 #define COLOR_WHITE           0xFFFFU
 #define COLOR_YELLOW          0xFFE0U
 #define COLOR_PANEL           0x0841U
@@ -26,22 +27,27 @@
 #define COLOR_GRAY            0x4208U
 #define COLOR_GREEN           0x0400U
 
-/* GEOMETRIA CAMPO DA GIOCO FULL SCREEN (320x240) */
-#define CELL_SIZE             10U   // 32 * 10 = 320px, 24 * 10 = 240px (Full Screen)
+/* GAME BOARD DIMENSIONS */
+#define CELL_SIZE             10U   // 32 * 10 = 320px width, 21 * 10 = 210px height
 #define BOARD_WIDTH           (GRID_WIDTH * CELL_SIZE)   // 320px
-#define BOARD_HEIGHT          (GRID_HEIGHT * CELL_SIZE)  // 240px
-#define BOARD_ORIGIN_X        0U                         // Nessun margine a sinistra
-#define BOARD_ORIGIN_Y        0U                         // Nessun margine in alto
+#define BOARD_HEIGHT          (GRID_HEIGHT * CELL_SIZE)  // 210px
+#define BOARD_ORIGIN_X        0U                         // 0px        
+#define BOARD_ORIGIN_Y        15U                        // starts below the 15px top bar (Y: 15..224)    
 
 #define LCD_DATA_ADDRESS (LCD_FSMC_BASE_ADDRESS + LCD_FSMC_DATA_OFFSET)
 
+// FSMC memory-mapped register pointers 
 static volatile uint16_t *const lcdCommand = (volatile uint16_t *)LCD_FSMC_BASE_ADDRESS;
 static volatile uint16_t *const lcdData    = (volatile uint16_t *)LCD_DATA_ADDRESS;
+
 
 static void write_command(uint8_t command) { *lcdCommand = command; }
 static void write_data(uint8_t data)       { *lcdData = data; }
 static void write_word(uint16_t data)      { *lcdData = data; }
 
+/**
+ * Sets the active rectangular drawing window (Column & Page address).
+ */
 static void set_window(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1)
 {
   write_command(0x2A);
@@ -55,6 +61,9 @@ static void set_window(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1)
   write_command(0x2C);
 }
 
+/**
+ * Fills a solid colored rectangle with boundary clipping.
+ */
 static void fill_rect(uint16_t x, uint16_t y, uint16_t width, uint16_t height, uint16_t color)
 {
   if (x >= TFT_WIDTH || y >= TFT_HEIGHT || width == 0U || height == 0U) return;
@@ -69,6 +78,9 @@ static void fill_rect(uint16_t x, uint16_t y, uint16_t width, uint16_t height, u
   }
 }
 
+/**
+ * Clears the entire display with a solid background color.
+ */
 void LCD_Clear(uint16_t color)
 {
   fill_rect(0, 0, TFT_WIDTH, TFT_HEIGHT, color);
@@ -77,36 +89,54 @@ void LCD_Clear(uint16_t color)
 static const uint8_t *glyph(char character)
 {
   static const uint8_t blank[5] = {0, 0, 0, 0, 0};
-  static const uint8_t colon[5]  = {0x00, 0x36, 0x36, 0x00, 0x00}; // Due punti ':'
-  static const uint8_t hyphen[5] = {0x08, 0x08, 0x08, 0x08, 0x08}; // Meno '-'
-  static const uint8_t excl[5]   = {0x00, 0x00, 0x5F, 0x00, 0x00}; // Esclamativo '!'
-  static const uint8_t dot[5]    = {0x00, 0x60, 0x60, 0x00, 0x00}; // Punto '.'
+  static const uint8_t colon[5]  = {0x00, 0x36, 0x36, 0x00, 0x00}; //  ':'
+  static const uint8_t hyphen[5] = {0x08, 0x08, 0x08, 0x08, 0x08}; // '-'
+  static const uint8_t excl[5]   = {0x00, 0x00, 0x5F, 0x00, 0x00}; //  '!'
+  static const uint8_t dot[5]    = {0x00, 0x60, 0x60, 0x00, 0x00}; //  '.'
   static const uint8_t lbrack[5] = {0x00, 0x7F, 0x41, 0x41, 0x00}; // '['
   static const uint8_t rbrack[5] = {0x00, 0x41, 0x41, 0x7F, 0x00}; // ']'
   static const uint8_t gt[5]     = {0x41, 0x22, 0x14, 0x08, 0x00}; // '>'
   static const uint8_t lt[5]     = {0x08, 0x14, 0x22, 0x41, 0x00}; // '<'
   
   static const uint8_t digits[][5] = {
-    {0x3E,0x51,0x49,0x45,0x3E}, {0x00,0x42,0x7F,0x40,0x00},
-    {0x42,0x61,0x51,0x49,0x46}, {0x21,0x41,0x45,0x4B,0x31},
-    {0x18,0x14,0x12,0x7F,0x10}, {0x27,0x45,0x45,0x45,0x39},
-    {0x3C,0x4A,0x49,0x49,0x30}, {0x01,0x71,0x09,0x05,0x03},
-    {0x36,0x49,0x49,0x49,0x36}, {0x06,0x49,0x49,0x29,0x1E}
+    {0x3E,0x51,0x49,0x45,0x3E}, // '0'
+    {0x00,0x42,0x7F,0x40,0x00}, // '1'
+    {0x42,0x61,0x51,0x49,0x46}, // '2'
+    {0x21,0x41,0x45,0x4B,0x31}, // '3'
+    {0x18,0x14,0x12,0x7F,0x10}, // '4'
+    {0x27,0x45,0x45,0x45,0x39}, // '5'
+    {0x3C,0x4A,0x49,0x49,0x30}, // '6'
+    {0x01,0x71,0x09,0x05,0x03}, // '7'
+    {0x36,0x49,0x49,0x49,0x36}, // '8'
+    {0x06,0x49,0x49,0x29,0x1E}  // '9'
   };
   static const uint8_t letters[][5] = {
-    {0x7E,0x11,0x11,0x11,0x7E}, {0x7F,0x49,0x49,0x49,0x36},
-    {0x3E,0x41,0x41,0x41,0x22}, {0x7F,0x41,0x41,0x22,0x1C},
-    {0x7F,0x49,0x49,0x49,0x41}, {0x7F,0x09,0x09,0x09,0x01},
-    {0x3E,0x41,0x49,0x49,0x7A}, {0x7F,0x08,0x08,0x08,0x7F},
-    {0x00,0x41,0x7F,0x41,0x00}, {0x20,0x40,0x41,0x3F,0x01},
-    {0x7F,0x08,0x14,0x22,0x41}, {0x7F,0x40,0x40,0x40,0x40},
-    {0x7F,0x02,0x0C,0x02,0x7F}, {0x7F,0x04,0x08,0x10,0x7F},
-    {0x3E,0x41,0x41,0x41,0x3E}, {0x7F,0x09,0x09,0x09,0x06},
-    {0x3E,0x41,0x51,0x21,0x5E}, {0x7F,0x09,0x19,0x29,0x46},
-    {0x46,0x49,0x49,0x49,0x31}, {0x01,0x01,0x7F,0x01,0x01},
-    {0x3F,0x40,0x40,0x40,0x3F}, {0x1F,0x20,0x40,0x20,0x1F},
-    {0x7F,0x20,0x18,0x20,0x7F}, {0x63,0x14,0x08,0x14,0x63},
-    {0x07,0x08,0x70,0x08,0x07}, {0x61,0x51,0x49,0x45,0x43}
+    {0x7E,0x11,0x11,0x11,0x7E}, // 'A'
+    {0x7F,0x49,0x49,0x49,0x36}, // 'B'
+    {0x3E,0x41,0x41,0x41,0x22}, // 'C'
+    {0x7F,0x41,0x41,0x22,0x1C}, // 'D'
+    {0x7F,0x49,0x49,0x49,0x41}, // 'E'
+    {0x7F,0x09,0x09,0x09,0x01}, // 'F'
+    {0x3E,0x41,0x49,0x49,0x7A}, // 'G'
+    {0x7F,0x08,0x08,0x08,0x7F}, // 'H'
+    {0x00,0x41,0x7F,0x41,0x00}, // 'I'
+    {0x20,0x40,0x41,0x3F,0x01}, // 'J'
+    {0x7F,0x08,0x14,0x22,0x41}, // 'K'
+    {0x7F,0x40,0x40,0x40,0x40}, // 'L'
+    {0x7F,0x02,0x0C,0x02,0x7F}, // 'M'
+    {0x7F,0x04,0x08,0x10,0x7F}, // 'N'
+    {0x3E,0x41,0x41,0x41,0x3E}, // 'O'
+    {0x7F,0x09,0x09,0x09,0x06}, // 'P'
+    {0x3E,0x41,0x51,0x21,0x5E}, // 'Q'
+    {0x7F,0x09,0x19,0x29,0x46}, // 'R'
+    {0x46,0x49,0x49,0x49,0x31}, // 'S'
+    {0x01,0x01,0x7F,0x01,0x01}, // 'T'
+    {0x3F,0x40,0x40,0x40,0x3F}, // 'U'
+    {0x1F,0x20,0x40,0x20,0x1F}, // 'V'
+    {0x7F,0x20,0x18,0x20,0x7F}, // 'W'
+    {0x63,0x14,0x08,0x14,0x63}, // 'X'
+    {0x07,0x08,0x70,0x08,0x07}, // 'Y'
+    {0x61,0x51,0x49,0x45,0x43}  // 'Z'
   };
 
   if (character == ':') return colon;
@@ -121,8 +151,10 @@ static const uint8_t *glyph(char character)
   if (character >= 'A' && character <= 'Z') return letters[(uint8_t)(character - 'A')];
   if (character >= 'a' && character <= 'z') return letters[(uint8_t)(character - 'a')];
   return blank;
-  return blank;
 }
+/**
+ * @brief Draws a text string 
+ */
 static void draw_text(uint16_t x, uint16_t y, const char *text, uint16_t color, uint8_t scale)
 {
   while (text != NULL && *text != '\0') {
@@ -139,6 +171,9 @@ static void draw_text(uint16_t x, uint16_t y, const char *text, uint16_t color, 
   }
 }
 
+/**
+ * @brief Draws horizontally centered text 
+ */
 static void draw_text_centered(uint16_t y, const char *text, uint16_t color, uint8_t scale)
 {
   uint16_t length = 0U;
@@ -147,6 +182,54 @@ static void draw_text_centered(uint16_t y, const char *text, uint16_t color, uin
   draw_text(width >= TFT_WIDTH ? 0U : (TFT_WIDTH - width) / 2U, y, text, color, scale);
 }
 
+/**
+ * @brief Streams and renders an  image stored in external SPI Flash.
+ */
+static void draw_flash_image(uint32_t flashAddress, uint16_t x0, uint16_t y0, uint16_t width, uint16_t height)
+{
+  if (!ExternalFlash_IsReady()) {
+    ExternalFlash_Init();
+  }
+
+  if (!ExternalFlash_IsReady()) {
+    fill_rect(x0, y0, width, height, COLOR_HOST_BG);
+    return;
+  }
+
+  set_window(x0, y0, (uint16_t)(x0 + width - 1U), (uint16_t)(y0 + height - 1U));
+
+  static uint32_t last_logged_addr = 0xFFFFFFFFU;
+  if (flashAddress != last_logged_addr) {
+    printf("[FLASH] Caricamento immagine da memoria esterna (Addr: 0x%06lX, Dim: %ux%u)...\r\n",
+           (unsigned long)flashAddress, width, height);
+    last_logged_addr = flashAddress;
+  }
+
+  #define FLASH_CHUNK_PIXELS 128U
+  uint8_t byteBuf[FLASH_CHUNK_PIXELS * 2U];
+  uint32_t totalPixels = (uint32_t)width * height;
+  uint32_t currentAddr = flashAddress;
+
+  while (totalPixels > 0U) {
+    uint32_t toRead = (totalPixels > FLASH_CHUNK_PIXELS) ? FLASH_CHUNK_PIXELS : totalPixels;
+    if (ExternalFlash_Read(currentAddr, byteBuf, toRead * 2U)) {
+      for (uint32_t i = 0U; i < toRead; i++) {
+        uint16_t color = ((uint16_t)byteBuf[i * 2U] << 8) | byteBuf[i * 2U + 1U];
+        write_word(color);
+      }
+    } else {
+      for (uint32_t i = 0U; i < toRead; i++) {
+        write_word(COLOR_HOST_BG);
+      }
+    }
+    currentAddr += toRead * 2U;
+    totalPixels -= toRead;
+  }
+}
+
+/**
+ * @brief Draws a full-screen grid background 
+ */
 static void draw_background(uint16_t baseColor, uint16_t accentColor)
 {
   fill_rect(0, 0, TFT_WIDTH, TFT_HEIGHT, baseColor);
@@ -154,6 +237,17 @@ static void draw_background(uint16_t baseColor, uint16_t accentColor)
   for (uint16_t x = 0U; x < TFT_WIDTH; x += CELL_SIZE) fill_rect(x, 0U, 1U, TFT_HEIGHT, accentColor);
 }
 
+/**
+ * @brief Renders the full-screen 320x240 Snake background wallpaper from external Flash.
+ */
+static void draw_snake_background(void)
+{
+  draw_flash_image(EXTERNAL_FLASH_SNAKE_ADDRESS, 0U, 0U, TFT_WIDTH, TFT_HEIGHT);
+}
+
+/**
+* LEVEL SELECT PANEL
+ */
 static void draw_panel(uint16_t x, uint16_t y, uint16_t width, uint16_t height)
 {
   fill_rect(x, y, width, height, COLOR_PANEL);
@@ -161,6 +255,9 @@ static void draw_panel(uint16_t x, uint16_t y, uint16_t width, uint16_t height)
   fill_rect(x + 2U, y + height - 3U, width - 4U, 1U, COLOR_HOST_BG);
 }
 
+/**
+ *  Interactive button with label, border and selection highlight
+ */
 static void draw_btn(uint16_t x, uint16_t y, uint16_t width, uint16_t height, const char *label, bool selected, uint16_t activeBgColor, uint16_t textColor)
 {
   uint16_t bg = selected ? activeBgColor : COLOR_DARK_GRAY;
@@ -182,7 +279,7 @@ static void draw_btn(uint16_t x, uint16_t y, uint16_t width, uint16_t height, co
   draw_text(tx, ty, label, txtCol, 1U);
 }
 
-/* TIPI E STATO RENDERING DIFFERENZIALE (DIRTY CELLS) */
+
 typedef enum {
   CELL_EMPTY = 0,
   CELL_WALL,
@@ -198,6 +295,8 @@ typedef enum {
 static bool game_board_needs_full_redraw = true;
 static const uint16_t enemyColors[MAX_AI_SNAKES] = {0xFD20U, 0x051FU, 0xF81FU, 0xFFE0U};
 
+//render snake body
+
 static void render_body(uint16_t buf[CELL_SIZE][CELL_SIZE], uint16_t bodyColor)
 {
   for (int8_t r = 2; r <= 8; r++) {
@@ -211,40 +310,65 @@ static void render_body(uint16_t buf[CELL_SIZE][CELL_SIZE], uint16_t bodyColor)
   }
 }
 
+// render snake head 
 static void render_head(uint16_t buf[CELL_SIZE][CELL_SIZE], uint16_t headColor, Direction_t dir)
 {
-  for (int8_t r = 1; r <= 9; r++) {
-    for (int8_t c = 1; c <= 9; c++) {
+
+  for (int8_t r = 1; r <= 8; r++) {
+    for (int8_t c = 1; c <= 8; c++) {
       int8_t dr = r - 5;
       int8_t dc = c - 5;
-      if (dr * dr + dc * dc <= 16) {
+      if (dr * dr + dc * dc <= 14) {
         buf[r][c] = headColor;
       }
     }
   }
 
+
   if (dir == DIR_RIGHT) {
-    buf[3][6] = COLOR_WHITE;
-    buf[7][6] = COLOR_WHITE;
-    buf[5][8] = 0xF800U;
-    buf[5][9] = 0xF800U;
+    // Upper eye
+    buf[2][5] = COLOR_WHITE; buf[2][6] = COLOR_WHITE;
+    buf[3][5] = COLOR_WHITE; buf[3][6] = 0x0000U;
+    // Lower eye
+    buf[6][5] = COLOR_WHITE; buf[6][6] = COLOR_WHITE;
+    buf[7][5] = COLOR_WHITE; buf[7][6] = 0x0000U;
+    // Red tongue pointing right
+    buf[4][8] = 0xF800U; buf[4][9] = 0xF800U;
+    buf[5][8] = 0xF800U; buf[5][9] = 0xF800U;
   } else if (dir == DIR_LEFT) {
-    buf[3][3] = COLOR_WHITE;
-    buf[7][3] = COLOR_WHITE;
-    buf[5][0] = 0xF800U;
-    buf[5][1] = 0xF800U;
-  } else if (dir == DIR_UP) {
-    buf[6][3] = COLOR_WHITE;
-    buf[6][7] = COLOR_WHITE;
-    buf[8][5] = 0xF800U;
-    buf[9][5] = 0xF800U;
-  } else { // DIR_DOWN
-    buf[3][3] = COLOR_WHITE;
-    buf[3][7] = COLOR_WHITE;
-    buf[0][5] = 0xF800U;
-    buf[1][5] = 0xF800U;
+    // Upper eye
+    buf[2][3] = COLOR_WHITE; buf[2][4] = COLOR_WHITE;
+    buf[3][3] = 0x0000U;    buf[3][4] = COLOR_WHITE;
+    // Lower eye
+    buf[6][3] = COLOR_WHITE; buf[6][4] = COLOR_WHITE;
+    buf[7][3] = 0x0000U;    buf[7][4] = COLOR_WHITE;
+    // Red tongue pointing left
+    buf[4][0] = 0xF800U; buf[4][1] = 0xF800U;
+    buf[5][0] = 0xF800U; buf[5][1] = 0xF800U;
+  } else if (dir == DIR_DOWN) { // hostY = GRID_HEIGHT - 1 - y: DIR_DOWN maps to decreasing row 'r'
+    // Left eye
+    buf[3][2] = COLOR_WHITE; buf[3][3] = COLOR_WHITE;
+    buf[2][2] = 0x0000U;    buf[2][3] = COLOR_WHITE;
+    // Right eye
+    buf[3][6] = COLOR_WHITE; buf[3][7] = COLOR_WHITE;
+    buf[2][6] = COLOR_WHITE; buf[2][7] = 0x0000U;
+    // Red tongue pointing along motion direction
+    buf[0][4] = 0xF800U; buf[0][5] = 0xF800U;
+    buf[1][4] = 0xF800U; buf[1][5] = 0xF800U;
+  } else { // DIR_UP: maps to increasing row 'r' on LCD
+    // Left eye
+    buf[6][2] = COLOR_WHITE; buf[6][3] = COLOR_WHITE;
+    buf[7][2] = 0x0000U;    buf[7][3] = COLOR_WHITE;
+    // Right eye
+    buf[6][6] = COLOR_WHITE; buf[6][7] = COLOR_WHITE;
+    buf[7][6] = COLOR_WHITE; buf[7][7] = 0x0000U;
+    // Red tongue pointing along motion direction
+    buf[8][4] = 0xF800U; buf[8][5] = 0xF800U;
+    buf[9][4] = 0xF800U; buf[9][5] = 0xF800U;
   }
 }
+
+// RENDER A SINGLE CELL IN THE GRID
 
 static void render_cell(uint16_t x, uint16_t y, uint8_t cellType)
 {
@@ -256,14 +380,14 @@ static void render_cell(uint16_t x, uint16_t y, uint8_t cellType)
 
   uint16_t buf[CELL_SIZE][CELL_SIZE];
 
-  // 1. Sfondo base cella
+  
   for (uint8_t r = 0; r < CELL_SIZE; r++) {
     for (uint8_t c = 0; c < CELL_SIZE; c++) {
       buf[r][c] = COLOR_HOST_BG;
     }
   }
 
-  // 2. Linee Griglia interne alla cella
+
   for (uint8_t c = 0; c < CELL_SIZE; c++) buf[0][c] = COLOR_HOST_GRID;
   for (uint8_t r = 0; r < CELL_SIZE; r++) buf[r][0] = COLOR_HOST_GRID;
   if (x == (GRID_WIDTH - 1U)) {
@@ -273,7 +397,7 @@ static void render_cell(uint16_t x, uint16_t y, uint8_t cellType)
     for (uint8_t c = 0; c < CELL_SIZE; c++) buf[CELL_SIZE - 1U][c] = COLOR_HOST_GRID;
   }
 
-  // 3. Grafica elemento nella cella
+ 
   switch (cellType) {
     case CELL_WALL:
       for (uint8_t r = 1U; r <= 8U; r++) {
@@ -321,7 +445,6 @@ static void render_cell(uint16_t x, uint16_t y, uint8_t cellType)
       break;
   }
 
-  // 4. Trasferimento atomico al display (1 sola configurazione finestra per cella)
   set_window(px, py, (uint16_t)(px + CELL_SIZE - 1U), (uint16_t)(py + CELL_SIZE - 1U));
   for (uint8_t r = 0; r < CELL_SIZE; r++) {
     for (uint8_t c = 0; c < CELL_SIZE; c++) {
@@ -332,29 +455,28 @@ static void render_cell(uint16_t x, uint16_t y, uint8_t cellType)
 
 static void draw_top_info_bar(const Game_t *game)
 {
-  fill_rect(0, 0, TFT_WIDTH, 14U, 0x0000U);
-  char infoStr[40];
+  fill_rect(0, 0, TFT_WIDTH, 15U, 0x0000U);
+  char infoStr[64];
   snprintf(infoStr, sizeof(infoStr), "Player: %s  Score: %lu  Stage: %u", 
            game->playerName[0] != '\0' ? game->playerName : "TEST", 
            (unsigned long)game->score, 
            (unsigned int)game->stage);
-  draw_text(6U, 3U, infoStr, COLOR_WHITE, 1U);
+  draw_text(6U, 4U, infoStr, COLOR_WHITE, 1U);
 }
 
 static void draw_bottom_help_bar(void)
 {
-  fill_rect(0, 231U, TFT_WIDTH, 9U, 0x0000U);
-  draw_text_centered(232U, "PRESS X: PAUSE", COLOR_YELLOW, 1U);
+  fill_rect(0, 225U, TFT_WIDTH, 15U, 0x0000U);
+  draw_text_centered(228U, "PRESS X: PAUSE", COLOR_YELLOW, 1U);
 }
-
+// DRAW PAUSE PANEL
 static void draw_pause_overlay(const Console_t *console)
 {
-  // Popup Arcade Colorato Centrale
   draw_panel(50U, 60U, 220U, 115U);
   fill_rect(54U, 64U, 212U, 24U, COLOR_BLUE);
   draw_text_centered(70U, "GAME PAUSED", COLOR_YELLOW, 2U);
 
-  // 2 Bottoni Console Style
+  // 2 Botton
   bool resumeSel = (console->pauseBtn == PAUSE_BTN_RESUME);
   bool returnSel = (console->pauseBtn == PAUSE_BTN_RETURN_START);
 
@@ -362,9 +484,10 @@ static void draw_pause_overlay(const Console_t *console)
   draw_btn(70U, 135U, 180U, 28U, "RETURN HOME", returnSel, COLOR_RED, COLOR_WHITE);
 }
 
+//DRAW GAME OVER PANEL
 static void draw_gameover_overlay(const Game_t *game, const Console_t *console)
 {
-  // Finestra Game Over Arcade
+  //  Game Over Arcade POPUP
   draw_panel(30U, 25U, 260U, 195U);
   fill_rect(34U, 29U, 252U, 26U, COLOR_RED);
   draw_text_centered(34U, "GAME OVER", COLOR_WHITE, 2U);
@@ -373,7 +496,7 @@ static void draw_gameover_overlay(const Game_t *game, const Console_t *console)
   snprintf(scoreBuf, sizeof(scoreBuf), "FINAL SCORE: %lu", (unsigned long)game->score);
   draw_text_centered(62U, scoreBuf, COLOR_YELLOW, 1U);
 
-  // Sezione Classifica Top 3 Rapida
+  // TOP PLAYERS
   fill_rect(40U, 76U, 240U, 1U, COLOR_PANEL_LIGHT);
   draw_text(45U, 82U, "TOP PLAYERS:", COLOR_LIME, 1U);
   Snake_Leaderboard_Load();
@@ -389,7 +512,7 @@ static void draw_gameover_overlay(const Game_t *game, const Console_t *console)
     draw_text(45U, 96U + (i * 12U), rowStr, COLOR_WHITE, 1U);
   }
 
-  // 3 Bottoni Console Style
+  // 3 Botton
   bool restartSel = (console->gameOverBtn == GAMEOVER_BTN_RESTART);
   bool viewScoreSel = (console->gameOverBtn == GAMEOVER_BTN_VIEW_SCORE);
   bool returnSel = (console->gameOverBtn == GAMEOVER_BTN_RETURN_START);
@@ -411,7 +534,7 @@ static void draw_game(const Game_t *game, const Console_t *console)
   static PauseButton_t last_pause_btn = (PauseButton_t)-1;
   static GameOverButton_t last_gameover_btn = (GameOverButton_t)-1;
 
-  // Invalida tutte le celle se richiesto un refresh completo (nuova partita, stage superato, ecc.)
+
   if (game_board_needs_full_redraw || game->stage != last_rendered_stage) {
     memset(prev_board, 0xFF, sizeof(prev_board));
     draw_top_info_bar(game);
@@ -421,10 +544,9 @@ static void draw_game(const Game_t *game, const Console_t *console)
     game_board_needs_full_redraw = false;
   }
 
-  // Ricostruisce lo stato logico della scacchiera per il frame corrente
   memset(curr_board, CELL_EMPTY, sizeof(curr_board));
 
-  // 1. Muri / Ostacoli
+  // 1. WALLS
   for (int16_t y = 0; y < GRID_HEIGHT; y++) {
     for (int16_t x = 0; x < GRID_WIDTH; x++) {
       if (Snake_IsObstacle(game, (Point_t){x, y})) {
@@ -433,7 +555,7 @@ static void draw_game(const Game_t *game, const Console_t *console)
     }
   }
 
-  // 2. Cibo (Mele)
+  // 2. FOOD
   for (uint8_t foodIndex = 0U; foodIndex < game->foodCount; foodIndex++) {
     Point_t pt = game->foods[foodIndex];
     if (pt.x >= 0 && pt.x < GRID_WIDTH && pt.y >= 0 && pt.y < GRID_HEIGHT) {
@@ -441,7 +563,7 @@ static void draw_game(const Game_t *game, const Console_t *console)
     }
   }
 
-  // 3. Serpi Nemiche AI
+  // 3. AI SNAKES 
   for (uint8_t e = 0U; e < game->enemyCount; e++) {
     if (game->enemies[e].length > 0U) {
       for (uint16_t i = 1U; i < game->enemies[e].length; i++) {
@@ -458,7 +580,7 @@ static void draw_game(const Game_t *game, const Console_t *console)
     }
   }
 
-  // 4. Serpente Giocatore
+  // 4. SNAKE PLAYER
   if (game->snake.length > 0U) {
     for (uint16_t i = 1U; i < game->snake.length; i++) {
       Point_t pt = game->snake.body[i];
@@ -473,7 +595,7 @@ static void draw_game(const Game_t *game, const Console_t *console)
     }
   }
 
-  // 5. Renderizza ESCLUSIVAMENTE le celle modificate (Dirty Cells)
+
   bool row_near_top_changed = false;
   bool row_near_bottom_changed = false;
   for (uint8_t y = 0; y < GRID_HEIGHT; y++) {
@@ -492,7 +614,7 @@ static void draw_game(const Game_t *game, const Console_t *console)
     }
   }
 
-  // 6. Aggiorna le barre informativa/aiuto se punteggio/stage cambiano o se le righe superiore/inferiore sono sovrascritte
+ 
   if (game->score != last_rendered_score || game->stage != last_rendered_stage || row_near_top_changed) {
     draw_top_info_bar(game);
     last_rendered_score = game->score;
@@ -502,7 +624,7 @@ static void draw_game(const Game_t *game, const Console_t *console)
     draw_bottom_help_bar();
   }
 
-  // 7. Gestione overlay di stato (PAUSE, GAMEOVER, VICTORY, LEVEL_TRANSITION)
+// 7. GAME STATE  HANDLER (PAUSE, GAMEOVER, VICTORY, LEVEL_TRANSITION)
   if (game->state != last_rendered_game_state) {
     if (last_rendered_game_state == GAME_STATE_PAUSED ||
         last_rendered_game_state == GAME_STATE_GAMEOVER ||
@@ -531,7 +653,7 @@ static void draw_game(const Game_t *game, const Console_t *console)
 
     last_rendered_game_state = game->state;
   } else {
-    // Se lo stato è invariato ma siamo in un popup, aggiorna la selezione dei bottoni se l'utente ha mosso l'analogico
+    
     if (game->state == GAME_STATE_PAUSED && console->pauseBtn != last_pause_btn) {
       draw_pause_overlay(console);
       last_pause_btn = console->pauseBtn;
@@ -541,6 +663,8 @@ static void draw_game(const Game_t *game, const Console_t *console)
     }
   }
 }
+
+// DRAW VIRTUAL KEYBOARD
 
 static void draw_keyboard_key(uint8_t r, uint8_t c, bool isSelected)
 {
@@ -580,7 +704,7 @@ static void draw_keyboard_key(uint8_t r, uint8_t c, bool isSelected)
 static void draw_virtual_keyboard(const Console_t *console, uint8_t prevRow, uint8_t prevCol)
 {
   if (prevRow == 0xFFU || prevCol == 0xFFU) {
-    // Prima visualizzazione completa della tastiera
+    
     for (uint8_t r = 0U; r < 4U; r++) {
       for (uint8_t c = 0U; c < 7U; c++) {
         bool isSelected = (console->kbdRow == r && console->kbdCol == c);
@@ -588,7 +712,7 @@ static void draw_virtual_keyboard(const Console_t *console, uint8_t prevRow, uin
       }
     }
   } else {
-    // Aggiorna atomicamente SOLO i due tasti che cambiano stato (vecchio e nuovo)
+
     if (prevRow < 4U && prevCol < 7U) {
       draw_keyboard_key(prevRow, prevCol, false);
     }
@@ -596,16 +720,18 @@ static void draw_virtual_keyboard(const Console_t *console, uint8_t prevRow, uin
   }
 }
 
+// DRAW LEADERBOARD SCREEN
+
 static void draw_leaderboard_screen(const Console_t *console)
 {
   draw_background(COLOR_HOST_BG, COLOR_HOST_GRID);
   draw_panel(15U, 10U, 290U, 220U);
 
-  // Titolo
+  // Title
   fill_rect(20U, 14U, 280U, 24U, COLOR_BLUE);
   draw_text_centered(18U, "HALL OF FAME", COLOR_YELLOW, 2U);
 
-  // Header classifica
+  // Header TOP PLAYERS
   draw_text(25U, 45U, "RANK   PLAYER      SCORE", COLOR_LIME, 1U);
   fill_rect(25U, 57U, 270U, 1U, COLOR_PANEL_LIGHT);
 
@@ -625,7 +751,7 @@ static void draw_leaderboard_screen(const Console_t *console)
     draw_text(25U, 63U + (i * 15U), entryLine, color, 1U);
   }
 
-  // Pulsanti inferiori
+  // BOTTON
   bool restartSel = (console->leaderboardBtn == LEADERBOARD_BTN_RESTART);
   bool returnSel = (console->leaderboardBtn == LEADERBOARD_BTN_RETURN_HOME);
 
@@ -647,17 +773,50 @@ void LCD_Init(void)
   fill_rect(0, 0, TFT_WIDTH, TFT_HEIGHT, COLOR_HOST_BG);
 }
 
+static ConsoleState_t last_rendered_state = (ConsoleState_t)-1;
+static uint32_t last_clock_sec = 0xFFFFFFFFUL;
+
+void LCD_Sleep(void)
+{
+#if LCD_POWER_SAVE_DEMO_MODE
+  // DEMO MODE: Pure black screen (prevents white display when backlight is permanently 3.3V)
+  fill_rect(0, 0, TFT_WIDTH, TFT_HEIGHT, 0x0000U);
+  HAL_Delay(5U);
+#else
+  // HARDWARE SLEEP MODE: Native ILI9341 commands for true power saving
+  write_command(0x28); // Display OFF
+  HAL_Delay(5U);
+  write_command(0x10); // Enter Sleep Mode
+  HAL_Delay(120U);
+#endif
+}
+
+void LCD_Wakeup(void)
+{
+#if LCD_POWER_SAVE_DEMO_MODE
+  // DEMO MODE: No controller wakeup commands required
+  HAL_Delay(10U);
+#else
+  // HARDWARE SLEEP MODE: Restore ILI9341 controller
+  write_command(0x11); // Exit Sleep Mode
+  HAL_Delay(120U);
+  write_command(0x29); // Display ON
+  HAL_Delay(20U);
+#endif
+  last_rendered_state = (ConsoleState_t)-1;
+  last_clock_sec = 0xFFFFFFFFUL;
+  game_board_needs_full_redraw = true;
+}
+
 void LCD_Render(const Game_t *game, const Console_t *console)
 {
   if (game == NULL || console == NULL) return;
 
-  static ConsoleState_t last_rendered_state = (ConsoleState_t)-1;
   static Level_t last_selected_level = (Level_t)-1;
   static uint8_t last_kbd_row = 0xFFU;
   static uint8_t last_kbd_col = 0xFFU;
   static LeaderboardButton_t last_lb_btn = (LeaderboardButton_t)-1;
 
-  // Se cambia lo stato della console, ridisegniamo lo sfondo fisso del menu
   if (console->state != last_rendered_state)
   {
     switch (console->state)
@@ -670,31 +829,44 @@ void LCD_Render(const Game_t *game, const Console_t *console)
         draw_text_centered(120U, "PRESS X TO START", COLOR_YELLOW, 1U);
         break;
 
+      case CONSOLE_STATE_LOAD:
+
+        draw_flash_image(EXTERNAL_FLASH_CUBENIRO_ADDRESS, 0U, 0U, TFT_WIDTH, TFT_HEIGHT);
+       
+        fill_rect(0U, 212U, TFT_WIDTH, 20U, 0x0000U);
+        draw_text_centered(218U, "CUBENIRO ARCADE", COLOR_WHITE, 1U);
+        break;
+
       case CONSOLE_STATE_START:
-        draw_background(COLOR_HOST_BG, COLOR_HOST_GRID);
-        draw_panel(40U, 50U, 240U, 140U);
-        draw_text_centered(70U, "SNAKE", COLOR_LIME, 2U);
-        draw_text_centered(120U, "NEW GAME", COLOR_GREEN, 1U);
-        draw_text_centered(140U, "PRESS X TO START", COLOR_YELLOW, 1U);
+
+        draw_snake_background();
+      
+        draw_panel(45U, 60U, 230U, 120U);
+        draw_text_centered(72U, "SNAKE", COLOR_LIME, 2U);
+
+        draw_text_centered(108U, "NEW GAME", COLOR_WHITE, 2U);
+        draw_text_centered(150U, "PRESS X TO START", COLOR_YELLOW, 1U);
         break;
 
       case CONSOLE_STATE_NAME:
-        draw_background(COLOR_HOST_BG, COLOR_HOST_GRID);
+        draw_snake_background();
         draw_panel(15U, 10U, 290U, 220U);
         draw_text_centered(18U, "ENTER PLAYER NAME", COLOR_WHITE, 1U);
-        // Box contenitore per il nome inserito
+
+        // BOX NAME
         fill_rect(35U, 38U, 250U, 42U, COLOR_DARK_GRAY);
         fill_rect(35U, 38U, 250U, 2U, COLOR_CYAN);
         fill_rect(35U, 78U, 250U, 2U, COLOR_CYAN);
         fill_rect(35U, 38U, 2U, 42U, COLOR_CYAN);
         fill_rect(283U, 38U, 2U, 42U, COLOR_CYAN);
-        // Forza il refresh della tastiera e del testo
+
         last_kbd_row = 0xFFU;
         last_kbd_col = 0xFFU;
         break;
 
       case CONSOLE_STATE_DIFFICULTY:
-        draw_background(COLOR_BLUE, COLOR_HOST_GRID);
+       // LEVEL SELECT SCREEN
+        draw_snake_background();
         draw_panel(40U, 50U, 240U, 140U);
         draw_text_centered(70U, "DIFFICULTY", COLOR_WHITE, 1U);
         draw_text_centered(140U, "LEFT/RIGHT SELECT", COLOR_WHITE, 1U);
@@ -717,7 +889,7 @@ void LCD_Render(const Game_t *game, const Console_t *console)
     last_selected_level = (Level_t)-1;
   }
 
-  // Rendering dinamico in base allo stato attuale
+
   switch (console->state)
   {
     case CONSOLE_STATE_OFF:
@@ -728,7 +900,7 @@ void LCD_Render(const Game_t *game, const Console_t *console)
       if (total_sec != last_sec) {
         last_sec = total_sec;
 
-        // Base orario ricavata dalla compilazione (__TIME__ "HH:MM:SS" e __DATE__ "Mmm dd yyyy")
+        // TIME CONSOLE
         static uint8_t base_h = 16U, base_m = 48U, base_s = 0U;
         static uint8_t base_day = 5U, base_month = 10U;
         static uint16_t base_year = 2026U;
@@ -793,7 +965,7 @@ void LCD_Render(const Game_t *game, const Console_t *console)
 
     case CONSOLE_STATE_DIFFICULTY:
       if (console->selectedLevel != last_selected_level) {
-        fill_rect(70U, 100U, 180U, 20U, COLOR_BLUE); 
+        fill_rect(70U, 100U, 180U, 20U, COLOR_GREEN); 
         
         if (console->selectedLevel == LEVEL_EASY) 
           draw_text_centered(104U, "> EASY <", COLOR_LIME, 2U);
@@ -817,10 +989,11 @@ void LCD_Render(const Game_t *game, const Console_t *console)
       }
       break;
 
+    case CONSOLE_STATE_GAME:
+      draw_game(game, console);
+      break;
+
     default:
-      if (console->state != CONSOLE_STATE_START) {
-        draw_game(game, console);
-      }
       break;
   }
 }
