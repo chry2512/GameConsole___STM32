@@ -208,14 +208,17 @@ bool ExternalFlash_EnsureAssetsProgrammed(void) {
   bool snake_ok = false;
 
 
+  // Verify start, middle (76800) AND bottom edge (153500)
   if (ExternalFlash_Read(EXTERNAL_FLASH_CUBENIRO_ADDRESS, sample, sizeof(sample)) &&
       memcmp(sample, asset_cubeniro_rgb565, sizeof(sample)) == 0) {
     if (ExternalFlash_Read(EXTERNAL_FLASH_CUBENIRO_ADDRESS + 76800U, sample, sizeof(sample)) &&
         memcmp(sample, asset_cubeniro_rgb565 + 76800U, sizeof(sample)) == 0) {
-      cubeniro_ok = true;
+      if (ExternalFlash_Read(EXTERNAL_FLASH_CUBENIRO_ADDRESS + 153500U, sample, sizeof(sample)) &&
+          memcmp(sample, asset_cubeniro_rgb565 + 153500U, sizeof(sample)) == 0) {
+        cubeniro_ok = true;
+      }
     }
   }
-
 
   if (ExternalFlash_Read(EXTERNAL_FLASH_SNAKE_ADDRESS, sample, sizeof(sample)) &&
       memcmp(sample, asset_snake_rgb565, sizeof(sample)) == 0) {
@@ -225,7 +228,7 @@ bool ExternalFlash_EnsureAssetsProgrammed(void) {
     }
   }
 
-  // Force reprogramming to write fresh Bayer 8x8 image to external flash
+  // Force one clean reprogramming pass to guarantee 100% of both halves are written
   cubeniro_ok = false;
 
   if (cubeniro_ok && snake_ok) {

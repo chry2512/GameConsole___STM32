@@ -150,7 +150,7 @@ void Console_HandleEvent(Console_t *console, Game_t *game, ConsoleEvent_t event,
                         console->state = CONSOLE_STATE_START;
                     }
                 }
-            } else if (game->state == GAME_STATE_GAMEOVER) {
+            } else if (game->state == GAME_STATE_GAMEOVER || game->state == GAME_STATE_VICTORY) {
                 if (event == CONSOLE_EVENT_UP || event == CONSOLE_EVENT_LEFT) {
                     if (console->gameOverBtn > 0) console->gameOverBtn--;
                     else console->gameOverBtn = GAMEOVER_BTN_COUNT - 1;

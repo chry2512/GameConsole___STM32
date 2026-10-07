@@ -268,8 +268,8 @@ void StartGameLogicTask(void *argument)
       if (currentState == CONSOLE_STATE_LOAD) {
         if (prev_check_state != CONSOLE_STATE_LOAD) {
           load_start_tick = osKernelGetTickCount();
-        } else if ((osKernelGetTickCount() - load_start_tick) >= 2500U) {
-          printf("[LOAD] Timeout 2.5s completato -> passaggio automatico a START\r\n");
+        } else if ((osKernelGetTickCount() - load_start_tick) >= 5000U) {
+          printf("[LOAD] Timeout 5.0s completato -> passaggio automatico a START\r\n");
           Console_HandleEvent(&console, &game, CONSOLE_EVENT_BUTTON_SELECT, '\0');
         }
       }
@@ -376,9 +376,14 @@ void StartPowerManagerTask(void *argument)
     __HAL_GPIO_EXTI_CLEAR_IT(BTN_ON_OFF_Pin);
     NVIC_ClearPendingIRQ(BTN_ON_OFF_EXTI_IRQn);
     stopModeActive = 1U;
+
+    // Safely wait for any in-flight frame rendering or SPI flash read to finish
+    osMutexAcquire(gameMutexHandle, osWaitForever);
     vTaskSuspendAll();
     Enter_StopMode_Process();
     xTaskResumeAll();
+    osMutexRelease(gameMutexHandle);
+
     stopModeActive = 0U;
   }
 }

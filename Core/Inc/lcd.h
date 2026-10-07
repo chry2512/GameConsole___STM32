@@ -15,5 +15,6 @@ void LCD_Init(void);
 void LCD_Sleep(void); // OFF / Standby
 void LCD_Wakeup(void); // ON / Resume
 void LCD_Render(const Game_t *game, const Console_t *console);
+void LCD_ShowError(const char *msg);
 
 #endif

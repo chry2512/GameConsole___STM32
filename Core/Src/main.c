@@ -100,6 +100,7 @@ int main(void)
   MX_SPI1_Init();
   MX_USART1_UART_Init();
 
+
   /* USER CODE BEGIN 2 */
   printf("\r\n========================================\r\n");
   printf("  CUBENIRO GAME CONSOLE STM32F407\r\n");
@@ -232,9 +233,14 @@ void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
   __disable_irq();
+
+  // Show emergency red ERROR screen on LCD
+  LCD_ShowError("HARDWARE / DRIVER FAULT");
+
   while (1)
   {
     HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
+    HAL_GPIO_TogglePin(ON_LED_GPIO_Port, ON_LED_Pin);
     printf("\r\n[ERROR] [CRITICO] ERRORE DI SISTEMA RILEVATO! (Error_Handler attivato)\r\n");
     printf("[ERROR] Avvio segnalazione allarme visivo su LED ERROR...\r\n");
     for (volatile uint32_t i = 0; i < 400000; i++) { }

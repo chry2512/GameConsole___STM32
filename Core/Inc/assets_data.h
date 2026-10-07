@@ -11,7 +11,7 @@
  * ON --> 1
  * OFF --> 0
  */
-#define ENABLE_INTERNAL_ASSETS_DATA 1
+#define ENABLE_INTERNAL_ASSETS_DATA 0
 
 #if ENABLE_INTERNAL_ASSETS_DATA
 extern const uint8_t asset_cubeniro_rgb565[153600U];

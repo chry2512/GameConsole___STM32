@@ -12,8 +12,8 @@
 #define COLOR_HOST_GRID       0x10A2U 
 #define COLOR_HOST_WALL       0x4186U 
 #define COLOR_HOST_FOOD       0xF800U 
-#define COLOR_HOST_HEAD       0x07E0U 
-#define COLOR_HOST_BODY       0x57E5U 
+#define COLOR_HOST_HEAD       0x0560U /* Rich vibrant emerald green for maximum eye/tongue contrast */
+#define COLOR_HOST_BODY       0x0440U /* Darker green body so head stands out */
 #define COLOR_WHITE           0xFFFFU
 #define COLOR_YELLOW          0xFFE0U
 #define COLOR_PANEL           0x0841U
@@ -205,7 +205,7 @@ static void draw_flash_image(uint32_t flashAddress, uint16_t x0, uint16_t y0, ui
     last_logged_addr = flashAddress;
   }
 
-  #define FLASH_CHUNK_PIXELS 128U
+  #define FLASH_CHUNK_PIXELS 512U
   uint8_t byteBuf[FLASH_CHUNK_PIXELS * 2U];
   uint32_t totalPixels = (uint32_t)width * height;
   uint32_t currentAddr = flashAddress;
@@ -326,45 +326,53 @@ static void render_head(uint16_t buf[CELL_SIZE][CELL_SIZE], uint16_t headColor, 
 
 
   if (dir == DIR_RIGHT) {
-    // Upper eye
-    buf[2][5] = COLOR_WHITE; buf[2][6] = COLOR_WHITE;
-    buf[3][5] = COLOR_WHITE; buf[3][6] = 0x0000U;
-    // Lower eye
-    buf[6][5] = COLOR_WHITE; buf[6][6] = COLOR_WHITE;
-    buf[7][5] = COLOR_WHITE; buf[7][6] = 0x0000U;
-    // Red tongue pointing right
-    buf[4][8] = 0xF800U; buf[4][9] = 0xF800U;
-    buf[5][8] = 0xF800U; buf[5][9] = 0xF800U;
+    // Upper eye: bold 3x2 white sclera with sharp dark pupil
+    buf[1][4] = COLOR_WHITE; buf[1][5] = COLOR_WHITE; buf[1][6] = COLOR_WHITE;
+    buf[2][4] = COLOR_WHITE; buf[2][5] = 0x0000U;    buf[2][6] = COLOR_WHITE;
+    buf[3][4] = COLOR_WHITE; buf[3][5] = 0x0000U;    buf[3][6] = COLOR_WHITE;
+    // Lower eye: bold 3x2 white sclera with sharp dark pupil
+    buf[5][4] = COLOR_WHITE; buf[5][5] = COLOR_WHITE; buf[5][6] = COLOR_WHITE;
+    buf[6][4] = COLOR_WHITE; buf[6][5] = 0x0000U;    buf[6][6] = COLOR_WHITE;
+    buf[7][4] = COLOR_WHITE; buf[7][5] = 0x0000U;    buf[7][6] = COLOR_WHITE;
+    // Red tongue: elongated stem with forked tips
+    buf[4][7] = COLOR_RED; buf[4][8] = COLOR_RED;
+    buf[3][9] = COLOR_RED; buf[5][9] = COLOR_RED; // forked tip
   } else if (dir == DIR_LEFT) {
     // Upper eye
-    buf[2][3] = COLOR_WHITE; buf[2][4] = COLOR_WHITE;
-    buf[3][3] = 0x0000U;    buf[3][4] = COLOR_WHITE;
+    buf[1][3] = COLOR_WHITE; buf[1][4] = COLOR_WHITE; buf[1][5] = COLOR_WHITE;
+    buf[2][3] = COLOR_WHITE; buf[2][4] = 0x0000U;    buf[2][5] = COLOR_WHITE;
+    buf[3][3] = COLOR_WHITE; buf[3][4] = 0x0000U;    buf[3][5] = COLOR_WHITE;
     // Lower eye
-    buf[6][3] = COLOR_WHITE; buf[6][4] = COLOR_WHITE;
-    buf[7][3] = 0x0000U;    buf[7][4] = COLOR_WHITE;
-    // Red tongue pointing left
-    buf[4][0] = 0xF800U; buf[4][1] = 0xF800U;
-    buf[5][0] = 0xF800U; buf[5][1] = 0xF800U;
+    buf[5][3] = COLOR_WHITE; buf[5][4] = COLOR_WHITE; buf[5][5] = COLOR_WHITE;
+    buf[6][3] = COLOR_WHITE; buf[6][4] = 0x0000U;    buf[6][5] = COLOR_WHITE;
+    buf[7][3] = COLOR_WHITE; buf[7][4] = 0x0000U;    buf[7][5] = COLOR_WHITE;
+    // Red tongue: elongated stem with forked tips
+    buf[4][2] = COLOR_RED; buf[4][1] = COLOR_RED;
+    buf[3][0] = COLOR_RED; buf[5][0] = COLOR_RED; // forked tip
   } else if (dir == DIR_DOWN) { // hostY = GRID_HEIGHT - 1 - y: DIR_DOWN maps to decreasing row 'r'
     // Left eye
-    buf[3][2] = COLOR_WHITE; buf[3][3] = COLOR_WHITE;
-    buf[2][2] = 0x0000U;    buf[2][3] = COLOR_WHITE;
+    buf[3][1] = COLOR_WHITE; buf[3][2] = COLOR_WHITE; buf[3][3] = COLOR_WHITE;
+    buf[2][1] = COLOR_WHITE; buf[2][2] = 0x0000U;    buf[2][3] = COLOR_WHITE;
+    buf[1][1] = COLOR_WHITE; buf[1][2] = 0x0000U;    buf[1][3] = COLOR_WHITE;
     // Right eye
-    buf[3][6] = COLOR_WHITE; buf[3][7] = COLOR_WHITE;
-    buf[2][6] = COLOR_WHITE; buf[2][7] = 0x0000U;
-    // Red tongue pointing along motion direction
-    buf[0][4] = 0xF800U; buf[0][5] = 0xF800U;
-    buf[1][4] = 0xF800U; buf[1][5] = 0xF800U;
+    buf[3][5] = COLOR_WHITE; buf[3][6] = COLOR_WHITE; buf[3][7] = COLOR_WHITE;
+    buf[2][5] = COLOR_WHITE; buf[2][6] = 0x0000U;    buf[2][7] = COLOR_WHITE;
+    buf[1][5] = COLOR_WHITE; buf[1][6] = 0x0000U;    buf[1][7] = COLOR_WHITE;
+    // Red tongue: elongated stem with forked tips
+    buf[2][4] = COLOR_RED; buf[1][4] = COLOR_RED;
+    buf[0][3] = COLOR_RED; buf[0][5] = COLOR_RED; // forked tip
   } else { // DIR_UP: maps to increasing row 'r' on LCD
     // Left eye
-    buf[6][2] = COLOR_WHITE; buf[6][3] = COLOR_WHITE;
-    buf[7][2] = 0x0000U;    buf[7][3] = COLOR_WHITE;
+    buf[5][1] = COLOR_WHITE; buf[5][2] = COLOR_WHITE; buf[5][3] = COLOR_WHITE;
+    buf[6][1] = COLOR_WHITE; buf[6][2] = 0x0000U;    buf[6][3] = COLOR_WHITE;
+    buf[7][1] = COLOR_WHITE; buf[7][2] = 0x0000U;    buf[7][3] = COLOR_WHITE;
     // Right eye
-    buf[6][6] = COLOR_WHITE; buf[6][7] = COLOR_WHITE;
-    buf[7][6] = COLOR_WHITE; buf[7][7] = 0x0000U;
-    // Red tongue pointing along motion direction
-    buf[8][4] = 0xF800U; buf[8][5] = 0xF800U;
-    buf[9][4] = 0xF800U; buf[9][5] = 0xF800U;
+    buf[5][5] = COLOR_WHITE; buf[5][6] = COLOR_WHITE; buf[5][7] = COLOR_WHITE;
+    buf[6][5] = COLOR_WHITE; buf[6][6] = 0x0000U;    buf[6][7] = COLOR_WHITE;
+    buf[7][5] = COLOR_WHITE; buf[7][6] = 0x0000U;    buf[7][7] = COLOR_WHITE;
+    // Red tongue: elongated stem with forked tips
+    buf[7][4] = COLOR_RED; buf[8][4] = COLOR_RED;
+    buf[9][3] = COLOR_RED; buf[9][5] = COLOR_RED; // forked tip
   }
 }
 
@@ -522,6 +530,44 @@ static void draw_gameover_overlay(const Game_t *game, const Console_t *console)
   draw_btn(40U, 186U, 240U, 20U, "RETURN HOME", returnSel, COLOR_RED, COLOR_WHITE);
 }
 
+//DRAW VICTORY PANEL
+static void draw_victory_overlay(const Game_t *game, const Console_t *console)
+{
+  // Victory Arcade POPUP
+  draw_panel(30U, 25U, 260U, 195U);
+  fill_rect(34U, 29U, 252U, 26U, COLOR_GREEN);
+  draw_text_centered(34U, "VICTORY! YOU WIN!", COLOR_WHITE, 2U);
+
+  char scoreBuf[32];
+  snprintf(scoreBuf, sizeof(scoreBuf), "FINAL SCORE: %lu", (unsigned long)game->score);
+  draw_text_centered(62U, scoreBuf, COLOR_YELLOW, 1U);
+
+  // TOP PLAYERS
+  fill_rect(40U, 76U, 240U, 1U, COLOR_PANEL_LIGHT);
+  draw_text(45U, 82U, "TOP PLAYERS:", COLOR_LIME, 1U);
+  Snake_Leaderboard_Load();
+  uint8_t count = Snake_Leaderboard_Count();
+  for (uint8_t i = 0U; i < 3U; i++) {
+    char rowStr[36];
+    if (i < count) {
+      const LeaderboardEntry_t *entry = Snake_Leaderboard_Get(i);
+      snprintf(rowStr, sizeof(rowStr), "%u. %-10s %lu", (unsigned int)(i + 1U), entry->playerName, (unsigned long)entry->score);
+    } else {
+      snprintf(rowStr, sizeof(rowStr), "%u. ---------- 0", (unsigned int)(i + 1U));
+    }
+    draw_text(45U, 96U + (i * 12U), rowStr, COLOR_WHITE, 1U);
+  }
+
+  // 3 Botton (stessi tasti del GameOver: RESTART, VIEW SCORE, RETURN HOME)
+  bool restartSel = (console->gameOverBtn == GAMEOVER_BTN_RESTART);
+  bool viewScoreSel = (console->gameOverBtn == GAMEOVER_BTN_VIEW_SCORE);
+  bool returnSel = (console->gameOverBtn == GAMEOVER_BTN_RETURN_START);
+
+  draw_btn(40U, 138U, 240U, 20U, "RESTART", restartSel, COLOR_GREEN, COLOR_LIME);
+  draw_btn(40U, 162U, 240U, 20U, "VIEW SCORE", viewScoreSel, COLOR_BLUE, COLOR_CYAN);
+  draw_btn(40U, 186U, 240U, 20U, "RETURN HOME", returnSel, COLOR_RED, COLOR_WHITE);
+}
+
 static void draw_game(const Game_t *game, const Console_t *console)
 {
   if (game == NULL || console == NULL) return;
@@ -640,10 +686,8 @@ static void draw_game(const Game_t *game, const Console_t *console)
       draw_gameover_overlay(game, console);
       last_gameover_btn = console->gameOverBtn;
     } else if (game->state == GAME_STATE_VICTORY) {
-      draw_panel(45U, 75U, 230U, 85U);
-      draw_text_centered(88U, "WIN!", COLOR_LIME, 2U);
-      draw_text_centered(118U, "CONGRATULATIONS!", COLOR_WHITE, 1U);
-      draw_text_centered(133U, "PRESS X TO RESTART", COLOR_YELLOW, 1U);
+      draw_victory_overlay(game, console);
+      last_gameover_btn = console->gameOverBtn;
     } else if (game->state == GAME_STATE_LEVEL_TRANSITION) {
       draw_panel(70U, 85U, 180U, 60U);
       char transStr[24];
@@ -659,6 +703,9 @@ static void draw_game(const Game_t *game, const Console_t *console)
       last_pause_btn = console->pauseBtn;
     } else if (game->state == GAME_STATE_GAMEOVER && console->gameOverBtn != last_gameover_btn) {
       draw_gameover_overlay(game, console);
+      last_gameover_btn = console->gameOverBtn;
+    } else if (game->state == GAME_STATE_VICTORY && console->gameOverBtn != last_gameover_btn) {
+      draw_victory_overlay(game, console);
       last_gameover_btn = console->gameOverBtn;
     }
   }
@@ -803,9 +850,27 @@ void LCD_Wakeup(void)
   write_command(0x29); // Display ON
   HAL_Delay(20U);
 #endif
+  // Reset window coordinates to standard full screen
+  set_window(0U, 0U, TFT_WIDTH - 1U, TFT_HEIGHT - 1U);
   last_rendered_state = (ConsoleState_t)-1;
   last_clock_sec = 0xFFFFFFFFUL;
   game_board_needs_full_redraw = true;
+}
+
+void LCD_ShowError(const char *msg)
+{
+  // Reset window and clean screen to pure black
+  set_window(0U, 0U, TFT_WIDTH - 1U, TFT_HEIGHT - 1U);
+  fill_rect(0U, 0U, TFT_WIDTH, TFT_HEIGHT, 0x0000U);
+
+  // Red emergency alert panel centered
+  draw_panel(30U, 45U, 260U, 150U);
+  fill_rect(34U, 49U, 252U, 32U, COLOR_RED);
+  draw_text_centered(56U, "ERROR", COLOR_WHITE, 3U);
+
+  // Subtitle / message
+  fill_rect(40U, 95U, 240U, 1U, COLOR_PANEL_LIGHT);
+  draw_text_centered(110U, (msg != NULL && msg[0] != '\0') ? msg : "SYSTEM ERROR DETECTED", COLOR_YELLOW, 1U);
 }
 
 void LCD_Render(const Game_t *game, const Console_t *console)
