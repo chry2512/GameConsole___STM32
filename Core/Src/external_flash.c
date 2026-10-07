@@ -191,7 +191,9 @@ bool ExternalFlash_Program(uint32_t address, const void *data, uint32_t length) 
   return true;
 }
 
+#if ENABLE_INTERNAL_ASSETS_DATA
 static bool externalAssetsLoaded = false;
+#endif
 
 bool ExternalFlash_AreAssetsLoaded(void) {
 #if ENABLE_INTERNAL_ASSETS_DATA

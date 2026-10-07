@@ -32,6 +32,7 @@
 #include "touch.h"
 #include "external_flash.h"
 #include "assets_data.h"
+#include "bme280.h"
 #include <stdio.h>
 /* USER CODE END Includes */
 
@@ -51,7 +52,6 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
-
 /* USER CODE BEGIN Variables */
 static Game_t game;
 static Console_t console;
@@ -71,7 +71,6 @@ const osThreadAttr_t PowerManagerTask_attributes = {
   .priority = (osPriority_t) osPriorityAboveNormal,
 };
 /* USER CODE END Variables */
-
 /* Definitions for inputTask */
 osThreadId_t inputTaskHandle;
 const osThreadAttr_t inputTask_attributes = {
@@ -97,7 +96,7 @@ const osThreadAttr_t RenderTask_attributes = {
 osThreadId_t SensorTaskHandle;
 const osThreadAttr_t SensorTask_attributes = {
   .name = "SensorTask",
-  .stack_size = 128 * 4,
+  .stack_size = 512 * 4,
   .priority = (osPriority_t) osPriorityLow,
 };
 /* Definitions for joystickQueue */
@@ -117,7 +116,6 @@ const osEventFlagsAttr_t gameEvents_attributes = {
 };
 
 /* Private function prototypes -----------------------------------------------*/
-
 /* USER CODE BEGIN FunctionPrototypes */
 void StartPowerManagerTask(void *argument);
 static void handle_joystick_direction(const JoystickData_t *input);
@@ -265,22 +263,27 @@ void StartGameLogicTask(void *argument)
 
      
       static ConsoleState_t prev_check_state = CONSOLE_STATE_OFF;
+      static uint32_t load_start_tick = 0U;
+
       if (currentState == CONSOLE_STATE_LOAD) {
-#       if ENABLE_INTERNAL_ASSETS_DATA
-          // In internal asset mode, proceed ONLY when external Flash write & verify are 100% complete
-          if (ExternalFlash_AreAssetsLoaded()) {
-            printf("[LOAD] Caricamento Flash esterna completato al 100%% -> passaggio a START\r\n");
-            Console_HandleEvent(&console, &game, CONSOLE_EVENT_BUTTON_SELECT, '\0');
-          }
-        #else
-            static uint32_t load_start_tick = 0U;
-            if (prev_check_state != CONSOLE_STATE_LOAD) {
-              load_start_tick = osKernelGetTickCount();
-            } else if ((osKernelGetTickCount() - load_start_tick) >= 5000U) {
-              printf("[LOAD] Timeout 5.0s completato -> passaggio automatico a START\r\n");
-              Console_HandleEvent(&console, &game, CONSOLE_EVENT_BUTTON_SELECT, '\0');
-            }
-      #endif
+        if (prev_check_state != CONSOLE_STATE_LOAD) {
+          load_start_tick = osKernelGetTickCount();
+        }
+
+#if ENABLE_INTERNAL_ASSETS_DATA
+        // In modalita' asset interni: passa a START solo se completata la verifica Flash al 100%
+        // E sono trascorsi almeno 3 secondi per mostrare il logo Cubeniro
+        if (ExternalFlash_AreAssetsLoaded() && ((osKernelGetTickCount() - load_start_tick) >= 3000U)) {
+          printf("[LOAD] Caricamento Flash esterna verificato al 100%% -> passaggio a START\r\n");
+          Console_HandleEvent(&console, &game, CONSOLE_EVENT_BUTTON_SELECT, '\0');
+        }
+#else
+        // In modalita' Flash esterna gia' programmata: timeout standard di 5.0s
+        else if ((osKernelGetTickCount() - load_start_tick) >= 5000U) {
+          printf("[LOAD] Timeout 5.0s completato -> passaggio automatico a START\r\n");
+          Console_HandleEvent(&console, &game, CONSOLE_EVENT_BUTTON_SELECT, '\0');
+        }
+#endif
       }
       prev_check_state = currentState;
       uint32_t now = osKernelGetTickCount();
@@ -355,10 +358,55 @@ void StartSensorTask(void *argument)
 {
   /* USER CODE BEGIN StartSensorTask */
   (void) argument;
+
+  // Attesa breve per stabilizzazione alimentazione e bus I2C
+  osDelay(150U);
+
+  bool sensor_ready = false;
+
   /* Infinite loop */
   while (1)
   {
-    osDelay(SENSOR_POLL_INTERVAL_MS);
+    if (!sensor_ready) {
+      sensor_ready = BME280_Init();
+      if (sensor_ready) {
+        BME280_Data_t initData;
+        BME280_GetLatestData(&initData);
+        if (initData.type == SENSOR_TYPE_BME280) {
+          printf("[SENSOR] [CONNESSO] Sensore BME280 riconosciuto e attivo (T, P, RH)!\r\n");
+        } else {
+          printf("[SENSOR] [CONNESSO] Sensore BMP280 riconosciuto e attivo (T, P)!\r\n");
+        }
+      }
+    } else {
+      BME280_Data_t data;
+      if (BME280_Read(&data)) {
+        int32_t t_int = (int32_t)data.temperature;
+        int32_t t_dec = (int32_t)((data.temperature - (float)t_int) * 10.0f);
+        if (t_dec < 0) t_dec = -t_dec;
+
+        int32_t p_int = (int32_t)data.pressure;
+        int32_t p_dec = (int32_t)((data.pressure - (float)p_int) * 10.0f);
+        if (p_dec < 0) p_dec = -p_dec;
+
+        if (data.type == SENSOR_TYPE_BME280) {
+          int32_t h_int = (int32_t)data.humidity;
+          int32_t h_dec = (int32_t)((data.humidity - (float)h_int) * 10.0f);
+          if (h_dec < 0) h_dec = -h_dec;
+
+          printf("[SENSOR] BME280 -> Temp: %ld.%ld C | Press: %ld.%ld hPa | Umidita': %ld.%ld %%\r\n",
+                 (long)t_int, (long)t_dec, (long)p_int, (long)p_dec, (long)h_int, (long)h_dec);
+        } else {
+          printf("[SENSOR] BMP280 -> Temp: %ld.%ld C | Press: %ld.%ld hPa\r\n",
+                 (long)t_int, (long)t_dec, (long)p_int, (long)p_dec);
+        }
+      } else {
+        printf("[SENSOR] [ERRORE] Comunicazione I2C persa, tentero' la riconnessione...\r\n");
+        sensor_ready = false;
+      }
+    }
+
+    osDelay(2000U); // Campionamento / retry ogni 2 secondi
   }
   /* USER CODE END StartSensorTask */
 }

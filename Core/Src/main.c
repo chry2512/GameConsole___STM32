@@ -21,6 +21,7 @@
 #include "cmsis_os.h"
 #include "adc.h"
 #include "dma.h"
+#include "i2c.h"
 #include "spi.h"
 #include "usart.h"
 #include "gpio.h"
@@ -99,8 +100,7 @@ int main(void)
   MX_FSMC_Init();
   MX_SPI1_Init();
   MX_USART1_UART_Init();
-
-
+  MX_I2C1_Init();
   /* USER CODE BEGIN 2 */
   printf("\r\n========================================\r\n");
   printf("  CUBENIRO GAME CONSOLE STM32F407\r\n");
@@ -123,6 +123,7 @@ int main(void)
   {
     Error_Handler();
     /* USER CODE END WHILE */
+
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */

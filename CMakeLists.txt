@@ -50,6 +50,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Core/Src/touch.c
     Core/Src/external_flash.c
     Core/Src/assets_data.c
+    Core/Src/bme280.c
 )
 
 # Add include paths

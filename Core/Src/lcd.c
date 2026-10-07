@@ -2,6 +2,7 @@
 #include "main.h"
 #include "fsmc.h"
 #include "external_flash.h"
+#include "bme280.h"
 #include "stm32f4xx_hal.h"
 #include <stddef.h>
 #include <string.h>
@@ -1017,12 +1018,38 @@ void LCD_Render(const Game_t *game, const Console_t *console)
         uint8_t cur_s = (uint8_t)(current_sec_of_day % 60U);
         uint8_t cur_d = (uint8_t)(base_day + days_elapsed);
 
+        BME280_Data_t sData;
+        BME280_GetLatestData(&sData);
+
         char dateTimeStr[36];
-        snprintf(dateTimeStr, sizeof(dateTimeStr), "%02u-%02u-%04u %02u:%02u:%02u - 35 C", 
+        snprintf(dateTimeStr, sizeof(dateTimeStr), "%02u-%02u-%04u %02u:%02u:%02u", 
                  cur_d, base_month, base_year, cur_h, cur_m, cur_s);
         
-        fill_rect(25U, 145U, 270U, 12U, COLOR_PANEL);
-        draw_text_centered(147U, dateTimeStr, COLOR_WHITE, 1U);
+        fill_rect(25U, 142U, 270U, 12U, COLOR_PANEL);
+        draw_text_centered(144U, dateTimeStr, COLOR_WHITE, 1U);
+
+        char envStr[48];
+        if (sData.valid) {
+          int32_t t_int = (int32_t)sData.temperature;
+          int32_t t_dec = (int32_t)((sData.temperature - (float)t_int) * 10.0f);
+          if (t_dec < 0) t_dec = -t_dec;
+
+          int32_t p_int = (int32_t)sData.pressure;
+
+          if (sData.type == SENSOR_TYPE_BME280) {
+            int32_t h_int = (int32_t)sData.humidity;
+            snprintf(envStr, sizeof(envStr), "T:%ld.%ld C | P:%ld hPa | U:%ld%%", 
+                     (long)t_int, (long)t_dec, (long)p_int, (long)h_int);
+          } else {
+            snprintf(envStr, sizeof(envStr), "TEMP: %ld.%ld C | PRESS: %ld hPa", 
+                     (long)t_int, (long)t_dec, (long)p_int);
+          }
+        } else {
+          snprintf(envStr, sizeof(envStr), "WARNING: SENSOR DATA INVALID");
+        }
+
+        fill_rect(25U, 160U, 270U, 14U, COLOR_PANEL);
+        draw_text_centered(162U, envStr, COLOR_CYAN, 1U);
       }
       break;
     }
