@@ -31,6 +31,7 @@
 #include "lcd.h"
 #include "touch.h"
 #include "external_flash.h"
+#include "assets_data.h"
 #include <stdio.h>
 /* USER CODE END Includes */
 
@@ -263,15 +264,23 @@ void StartGameLogicTask(void *argument)
       }
 
      
-      static uint32_t load_start_tick = 0U;
       static ConsoleState_t prev_check_state = CONSOLE_STATE_OFF;
       if (currentState == CONSOLE_STATE_LOAD) {
-        if (prev_check_state != CONSOLE_STATE_LOAD) {
-          load_start_tick = osKernelGetTickCount();
-        } else if ((osKernelGetTickCount() - load_start_tick) >= 5000U) {
-          printf("[LOAD] Timeout 5.0s completato -> passaggio automatico a START\r\n");
-          Console_HandleEvent(&console, &game, CONSOLE_EVENT_BUTTON_SELECT, '\0');
-        }
+#       if ENABLE_INTERNAL_ASSETS_DATA
+          // In internal asset mode, proceed ONLY when external Flash write & verify are 100% complete
+          if (ExternalFlash_AreAssetsLoaded()) {
+            printf("[LOAD] Caricamento Flash esterna completato al 100%% -> passaggio a START\r\n");
+            Console_HandleEvent(&console, &game, CONSOLE_EVENT_BUTTON_SELECT, '\0');
+          }
+        #else
+            static uint32_t load_start_tick = 0U;
+            if (prev_check_state != CONSOLE_STATE_LOAD) {
+              load_start_tick = osKernelGetTickCount();
+            } else if ((osKernelGetTickCount() - load_start_tick) >= 5000U) {
+              printf("[LOAD] Timeout 5.0s completato -> passaggio automatico a START\r\n");
+              Console_HandleEvent(&console, &game, CONSOLE_EVENT_BUTTON_SELECT, '\0');
+            }
+      #endif
       }
       prev_check_state = currentState;
       uint32_t now = osKernelGetTickCount();

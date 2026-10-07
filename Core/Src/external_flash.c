@@ -191,6 +191,43 @@ bool ExternalFlash_Program(uint32_t address, const void *data, uint32_t length) 
   return true;
 }
 
+static bool externalAssetsLoaded = false;
+
+bool ExternalFlash_AreAssetsLoaded(void) {
+#if ENABLE_INTERNAL_ASSETS_DATA
+  return externalAssetsLoaded;
+#else
+  return true;
+#endif
+}
+
+#if ENABLE_INTERNAL_ASSETS_DATA
+static bool flash_verify_block(uint32_t flashAddr, const uint8_t *expectedData, uint32_t length, const char *name) {
+  uint8_t readBuffer[256];
+  uint32_t verified = 0U;
+
+  while (verified < length) {
+    uint32_t toRead = length - verified;
+    if (toRead > sizeof(readBuffer)) toRead = sizeof(readBuffer);
+
+    if (!ExternalFlash_Read(flashAddr + verified, readBuffer, toRead)) {
+      printf("[FLASH] [ERRORE] Lettura SPI fallita durante verifica %s ad offset %lu!\r\n", 
+             name, (unsigned long)verified);
+      return false;
+    }
+
+    if (memcmp(readBuffer, expectedData + verified, toRead) != 0) {
+      printf("[FLASH] [ERRORE] Discrepanza dati rilevata in %s ad offset %lu!\r\n", 
+             name, (unsigned long)verified);
+      return false;
+    }
+
+    verified += toRead;
+  }
+  return true;
+}
+#endif
+
 /**
  * @brief IF ENABLE_INTERNAL_ASSETS_DATA is set to 1, this function checks if the assets are already programmed 
  */
@@ -203,61 +240,78 @@ bool ExternalFlash_EnsureAssetsProgrammed(void) {
   }
 
 #if ENABLE_INTERNAL_ASSETS_DATA
-  uint8_t sample[32];
-  bool cubeniro_ok = false;
-  bool snake_ok = false;
+  externalAssetsLoaded = false;
 
-
-  // Verify start, middle (76800) AND bottom edge (153500)
-  if (ExternalFlash_Read(EXTERNAL_FLASH_CUBENIRO_ADDRESS, sample, sizeof(sample)) &&
-      memcmp(sample, asset_cubeniro_rgb565, sizeof(sample)) == 0) {
-    if (ExternalFlash_Read(EXTERNAL_FLASH_CUBENIRO_ADDRESS + 76800U, sample, sizeof(sample)) &&
-        memcmp(sample, asset_cubeniro_rgb565 + 76800U, sizeof(sample)) == 0) {
-      if (ExternalFlash_Read(EXTERNAL_FLASH_CUBENIRO_ADDRESS + 153500U, sample, sizeof(sample)) &&
-          memcmp(sample, asset_cubeniro_rgb565 + 153500U, sizeof(sample)) == 0) {
-        cubeniro_ok = true;
-      }
-    }
-  }
-
-  if (ExternalFlash_Read(EXTERNAL_FLASH_SNAKE_ADDRESS, sample, sizeof(sample)) &&
-      memcmp(sample, asset_snake_rgb565, sizeof(sample)) == 0) {
-    if (ExternalFlash_Read(EXTERNAL_FLASH_SNAKE_ADDRESS + 76800U, sample, sizeof(sample)) &&
-        memcmp(sample, asset_snake_rgb565 + 76800U, sizeof(sample)) == 0) {
-      snake_ok = true;
-    }
-  }
-
-  // Force one clean reprogramming pass to guarantee 100% of both halves are written
-  cubeniro_ok = false;
+  printf("[FLASH] Controllo integrita' dati residenti su Flash esterna...\r\n");
+  bool cubeniro_ok = flash_verify_block(EXTERNAL_FLASH_CUBENIRO_ADDRESS, asset_cubeniro_rgb565, ASSET_CUBENIRO_SIZE, "CUBENIRO");
+  bool snake_ok = flash_verify_block(EXTERNAL_FLASH_SNAKE_ADDRESS, asset_snake_rgb565, ASSET_SNAKE_SIZE, "SNAKE");
 
   if (cubeniro_ok && snake_ok) {
-    printf("[FLASH] Dati gia' caricati e validi in memoria Flash esterna (OK)\r\n");
+    externalAssetsLoaded = true;
+    printf("[FLASH] Dati gia' presenti e verificati al 100%% sulla Flash esterna (OK)\r\n");
     return true;
   }
 
-  printf("[FLASH] Nuovi dati da caricare rilevati (Flash non allineata). Inizio programmazione...\r\n");
+  printf("[FLASH] Flash non allineata o corrotta. Avvio riscrittura completa...\r\n");
 
   // 1. Scrittura immagine CUBENIRO
-  printf("[FLASH] [1/2] Cancellazione e scrittura immagine CUBENIRO (153.600 byte)...\r\n");
+  printf("[FLASH] [1/2] Cancellazione settori CUBENIRO (153.600 byte)...\r\n");
   uint32_t addr = EXTERNAL_FLASH_CUBENIRO_ADDRESS;
+  bool erase_ok = true;
   for (uint32_t s = 0; s < ASSET_CUBENIRO_SIZE; s += 4096U) {
-    ExternalFlash_EraseSector(addr + s);
+    if (!ExternalFlash_EraseSector(addr + s)) {
+      erase_ok = false;
+      break;
+    }
   }
-  ExternalFlash_Program(addr, asset_cubeniro_rgb565, ASSET_CUBENIRO_SIZE);
-  printf("[FLASH] [1/2] Immagine CUBENIRO scritta con successo!\r\n");
+  if (!erase_ok) {
+    printf("[FLASH] [ERRORE] Cancellazione settori CUBENIRO fallita!\r\n");
+    return false;
+  }
+
+  printf("[FLASH] [1/2] Scrittura CUBENIRO in corso...\r\n");
+  if (!ExternalFlash_Program(addr, asset_cubeniro_rgb565, ASSET_CUBENIRO_SIZE)) {
+    printf("[FLASH] [ERRORE] Scrittura pagine CUBENIRO fallita!\r\n");
+    return false;
+  }
+
+  printf("[FLASH] [1/2] Verifica byte-a-byte CUBENIRO (153.600 byte)...\r\n");
+  if (!flash_verify_block(addr, asset_cubeniro_rgb565, ASSET_CUBENIRO_SIZE, "CUBENIRO")) {
+    printf("[FLASH] [ERRORE] Verifica CUBENIRO fallita dopo scrittura!\r\n");
+    return false;
+  }
+  printf("[FLASH] [1/2] CUBENIRO scritto e verificato al 100%% con successo!\r\n");
 
   // 2. Scrittura immagine SNAKE
-  printf("[FLASH] [2/2] Cancellazione e scrittura immagine SNAKE (153.600 byte)...\r\n");
+  printf("[FLASH] [2/2] Cancellazione settori SNAKE (153.600 byte)...\r\n");
   addr = EXTERNAL_FLASH_SNAKE_ADDRESS;
+  erase_ok = true;
   for (uint32_t s = 0; s < ASSET_SNAKE_SIZE; s += 4096U) {
-    ExternalFlash_EraseSector(addr + s);
+    if (!ExternalFlash_EraseSector(addr + s)) {
+      erase_ok = false;
+      break;
+    }
   }
-  ExternalFlash_Program(addr, asset_snake_rgb565, ASSET_SNAKE_SIZE);
-  printf("[FLASH] [2/2] Immagine SNAKE scritta con successo!\r\n");
+  if (!erase_ok) {
+    printf("[FLASH] [ERRORE] Cancellazione settori SNAKE fallita!\r\n");
+    return false;
+  }
 
-  printf("[FLASH] Programmazione completata! Totale %lu byte scritti in Flash esterna.\r\n", 
-         (unsigned long)(ASSET_CUBENIRO_SIZE + ASSET_SNAKE_SIZE));
+  printf("[FLASH] [2/2] Scrittura SNAKE in corso...\r\n");
+  if (!ExternalFlash_Program(addr, asset_snake_rgb565, ASSET_SNAKE_SIZE)) {
+    printf("[FLASH] [ERRORE] Scrittura pagine SNAKE fallita!\r\n");
+    return false;
+  }
+
+  printf("[FLASH] [2/2] Verifica byte-a-byte SNAKE (153.600 byte)...\r\n");
+  if (!flash_verify_block(addr, asset_snake_rgb565, ASSET_SNAKE_SIZE, "SNAKE")) {
+    printf("[FLASH] [ERRORE] Verifica SNAKE fallita dopo scrittura!\r\n");
+    return false;
+  }
+  printf("[FLASH] [2/2] SNAKE scritto e verificato al 100%% con successo!\r\n");
+
+  externalAssetsLoaded = true;
+  printf("[FLASH] SUCCESSO TOTALE: 307.200 byte caricati e verificati al 100%% sulla Flash esterna!\r\n");
   return true;
 #else
   printf("[FLASH] Dati residenti su memoria Flash SPI esterna (Asset interni disattivati per risparmio RAM/ROM)\r\n");

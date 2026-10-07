@@ -16,6 +16,7 @@ bool ExternalFlash_IsReady(void);
 bool ExternalFlash_Read(uint32_t address, void *data, uint32_t length);
 bool ExternalFlash_EraseSector(uint32_t address); //RESET- RELOAD
 bool ExternalFlash_Program(uint32_t address, const void *data, uint32_t length);
-bool ExternalFlash_EnsureAssetsProgrammed(void); // LOAD OK
+bool ExternalFlash_EnsureAssetsProgrammed(void); // PROGRAMM ASSET OK
+bool ExternalFlash_AreAssetsLoaded(void);// LOAD ASSET OK
 
 #endif

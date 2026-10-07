@@ -12,8 +12,8 @@
 #define COLOR_HOST_GRID       0x10A2U 
 #define COLOR_HOST_WALL       0x4186U 
 #define COLOR_HOST_FOOD       0xF800U 
-#define COLOR_HOST_HEAD       0x0560U /* Rich vibrant emerald green for maximum eye/tongue contrast */
-#define COLOR_HOST_BODY       0x0440U /* Darker green body so head stands out */
+#define COLOR_HOST_HEAD       0x0560U 
+#define COLOR_HOST_BODY       0x0440U 
 #define COLOR_WHITE           0xFFFFU
 #define COLOR_YELLOW          0xFFE0U
 #define COLOR_PANEL           0x0841U
@@ -235,6 +235,24 @@ static void draw_background(uint16_t baseColor, uint16_t accentColor)
   fill_rect(0, 0, TFT_WIDTH, TFT_HEIGHT, baseColor);
   for (uint16_t y = 0U; y < TFT_HEIGHT; y += CELL_SIZE) fill_rect(0U, y, TFT_WIDTH, 1U, accentColor);
   for (uint16_t x = 0U; x < TFT_WIDTH; x += CELL_SIZE) fill_rect(x, 0U, 1U, TFT_HEIGHT, accentColor);
+}
+
+/**
+ * @brief Renders the full-screen 320x240 Cubeniro wallpaper.
+ * Directly from internal Flash (instant and flawless) when ENABLE_INTERNAL_ASSETS_DATA is 1,
+ * or streamed from external SPI Flash when 0.
+ */
+static void draw_cubeniro_background(void)
+{
+#if ENABLE_INTERNAL_ASSETS_DATA
+  set_window(0U, 0U, TFT_WIDTH - 1U, TFT_HEIGHT - 1U);
+  for (uint32_t i = 0U; i < 76800U; i++) {
+    uint16_t color = ((uint16_t)asset_cubeniro_rgb565[i * 2U] << 8) | asset_cubeniro_rgb565[i * 2U + 1U];
+    write_word(color);
+  }
+#else
+  draw_flash_image(EXTERNAL_FLASH_CUBENIRO_ADDRESS, 0U, 0U, TFT_WIDTH, TFT_HEIGHT);
+#endif
 }
 
 /**
@@ -895,8 +913,7 @@ void LCD_Render(const Game_t *game, const Console_t *console)
         break;
 
       case CONSOLE_STATE_LOAD:
-
-        draw_flash_image(EXTERNAL_FLASH_CUBENIRO_ADDRESS, 0U, 0U, TFT_WIDTH, TFT_HEIGHT);
+        draw_cubeniro_background();
        
         fill_rect(0U, 212U, TFT_WIDTH, 20U, 0x0000U);
         draw_text_centered(218U, "CUBENIRO ARCADE", COLOR_WHITE, 1U);
