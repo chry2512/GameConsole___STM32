@@ -25,11 +25,20 @@
 
 /* USER CODE END 0 */
 
+/*----------------------------------------------------------------------------*/
+/* Configure GPIO                                                             */
+/*----------------------------------------------------------------------------*/
 /* USER CODE BEGIN 1 */
 
 /* USER CODE END 1 */
 
-
+/** Configure pins as
+        * Analog
+        * Input
+        * Output
+        * EVENT_OUT
+        * EXTI
+*/
 void MX_GPIO_Init(void)
 {
 
@@ -44,26 +53,16 @@ void MX_GPIO_Init(void)
   __HAL_RCC_GPIOD_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(TOUCH_CS_PIN_GPIO_Port, TOUCH_CS_PIN_Pin, GPIO_PIN_SET);
-
-  /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOA, ON_LED_Pin|ERROR_LED_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(FLAS_CS_PIN_GPIO_Port, FLAS_CS_PIN_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(GPIOB, FLAS_CS_PIN_Pin|TOUCH_CS_PIN_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin : BTN_ON_OFF_Pin */
   GPIO_InitStruct.Pin = BTN_ON_OFF_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(BTN_ON_OFF_GPIO_Port, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : TOUCH_CS_PIN_Pin */
-  GPIO_InitStruct.Pin = TOUCH_CS_PIN_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
-  HAL_GPIO_Init(TOUCH_CS_PIN_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : ON_LED_Pin ERROR_LED_Pin */
   GPIO_InitStruct.Pin = ON_LED_Pin|ERROR_LED_Pin;
@@ -79,10 +78,17 @@ void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
   HAL_GPIO_Init(FLAS_CS_PIN_GPIO_Port, &GPIO_InitStruct);
 
+  /*Configure GPIO pin : TOUCH_CS_PIN_Pin */
+  GPIO_InitStruct.Pin = TOUCH_CS_PIN_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+  HAL_GPIO_Init(TOUCH_CS_PIN_GPIO_Port, &GPIO_InitStruct);
+
   /*Configure GPIO pin : TOUCH_INPUT_PIN_Pin */
   GPIO_InitStruct.Pin = TOUCH_INPUT_PIN_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(TOUCH_INPUT_PIN_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pin : JOY_BTN_PIN_Pin */

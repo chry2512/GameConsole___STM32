@@ -115,6 +115,7 @@ static void i2c_bus_recovery(void) {
     for (volatile uint32_t d = 0; d < 100; d++);
     HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_SET);
     for (volatile uint32_t d = 0; d < 100; d++);
+  }
 
   GPIO_InitStruct.Pin = GPIO_PIN_7;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_OD;

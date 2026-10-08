@@ -11,13 +11,13 @@ typedef enum {
 } SensorType_t;
 
 // Offset di calibrazione termica 
-#define BME280_TEMPERATURE_OFFSET  (-8.0f)
+#define BME280_TEMPERATURE_OFFSET  (-2.0f)
 
 typedef struct {
-  float temperature;   
-  float pressure;      /
-  float humidity;      
-  SensorType_t type;   
+  float temperature;   // Gradi Celsius
+  float pressure;      // Pressione mBar
+  float humidity;      // Umidita' relativa %
+  SensorType_t type;  
   bool valid;          
 } BME280_Data_t;
 

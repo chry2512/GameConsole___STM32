@@ -129,7 +129,11 @@ void StartSensorTask(void *argument);
 
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
 
-
+/**
+  * @brief  FreeRTOS initialization
+  * @param  None
+  * @retval None
+  */
 void MX_FREERTOS_Init(void) {
   /* USER CODE BEGIN Init */
 
@@ -190,7 +194,13 @@ void MX_FREERTOS_Init(void) {
 
 }
 
-
+/* USER CODE BEGIN Header_StartInputTask */
+/**
+  * @brief  Function implementing the inputTask thread.
+  * @param  argument: Not used
+  * @retval None
+  */
+/* USER CODE END Header_StartInputTask */
 void StartInputTask(void *argument)
 {
   /* USER CODE BEGIN StartInputTask */
@@ -211,7 +221,13 @@ void StartInputTask(void *argument)
   /* USER CODE END StartInputTask */
 }
 
-
+/* USER CODE BEGIN Header_StartGameLogicTask */
+/**
+* @brief Function implementing the GameLogicTask thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_StartGameLogicTask */
 void StartGameLogicTask(void *argument)
 {
   /* USER CODE BEGIN StartGameLogicTask */
@@ -224,7 +240,6 @@ void StartGameLogicTask(void *argument)
     if (osMutexAcquire(gameMutexHandle, osWaitForever) == osOK)
     {
       // 1. JOYSTICK INPUT
-
       JoystickData_t input = {0};
       while (osMessageQueueGet(joystickQueueHandle, &input, NULL, 0U) == osOK) {
         if (input.buttonPressed != 0U) {
@@ -233,6 +248,32 @@ void StartGameLogicTask(void *argument)
           handle_joystick_direction(&input);
         }
       }
+
+      // 1.1 TOUCH SCREEN INPUT (Tocca qualsiasi punto in OFF o START per avanzare allo step successivo)
+      static bool touch_was_pressed = false;
+      bool touch_now = Touch_IsPressed();
+
+      // Debug periodico (ogni 3 secondi in stato OFF o START) per monitorare lo stato del pin PC5
+      static uint32_t last_touch_debug_tick = 0U;
+      uint32_t current_tick = osKernelGetTickCount();
+      ConsoleState_t cState = Console_GetState(&console);
+      if ((cState == CONSOLE_STATE_OFF || cState == CONSOLE_STATE_START) && (current_tick - last_touch_debug_tick >= 3000U)) {
+        printf("[TOUCH MONITOR] PC5 (PENIRQ) = %d | Touch_IsPressed = %d\r\n", 
+               (int)HAL_GPIO_ReadPin(TOUCH_INPUT_PIN_GPIO_Port, TOUCH_INPUT_PIN_Pin), (int)touch_now);
+        last_touch_debug_tick = current_tick;
+      }
+
+      if (touch_now && !touch_was_pressed) {
+        printf("[TOUCH EVENT] Rilevata pressione dello schermo (PC5 LOW)!\r\n");
+        if (cState == CONSOLE_STATE_OFF) {
+          printf("[TOUCH] Schermo toccato in stato OFF -> Passaggio a LOAD\r\n");
+          Console_HandleEvent(&console, &game, CONSOLE_EVENT_POWER, '\0');
+        } else if (cState == CONSOLE_STATE_START) {
+          printf("[TOUCH] Schermo toccato in stato START -> Passaggio a NAME\r\n");
+          Console_HandleEvent(&console, &game, CONSOLE_EVENT_X, '\0');
+        }
+      }
+      touch_was_pressed = touch_now;
 
       // 2. CONSOLE STATE MACHINE
 
@@ -301,7 +342,13 @@ void StartGameLogicTask(void *argument)
   /* USER CODE END StartGameLogicTask */
 }
 
-
+/* USER CODE BEGIN Header_StartRenderTask */
+/**
+* @brief Function implementing the RenderTask thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_StartRenderTask */
 void StartRenderTask(void *argument)
 {
   /* USER CODE BEGIN StartRenderTask */
@@ -309,6 +356,7 @@ void StartRenderTask(void *argument)
   
 
   LCD_Init();
+  Touch_Init();
   ExternalFlash_Init();
   ExternalFlash_EnsureAssetsProgrammed();
 
@@ -325,7 +373,13 @@ void StartRenderTask(void *argument)
   /* USER CODE END StartRenderTask */
 }
 
-
+/* USER CODE BEGIN Header_StartSensorTask */
+/**
+* @brief Function implementing the SensorTask thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_StartSensorTask */
 void StartSensorTask(void *argument)
 {
   /* USER CODE BEGIN StartSensorTask */
@@ -339,42 +393,47 @@ void StartSensorTask(void *argument)
   /* Infinite loop */
   while (1)
   {
-    if (!sensor_ready) {
-      sensor_ready = BME280_Init();
-      if (sensor_ready) {
-        BME280_Data_t initData;
-        BME280_GetLatestData(&initData);
-        if (initData.type == SENSOR_TYPE_BME280) {
-          printf("[SENSOR] [CONNESSO] Sensore BME280 riconosciuto e attivo (T, P, RH)!\r\n");
-        } else {
-          printf("[SENSOR] [CONNESSO] Sensore BMP280 riconosciuto e attivo (T, P)!\r\n");
-        }
-      }
-    } else {
-      BME280_Data_t data;
-      if (BME280_Read(&data)) {
-        int32_t t_int = (int32_t)data.temperature;
-        int32_t t_dec = (int32_t)((data.temperature - (float)t_int) * 10.0f);
-        if (t_dec < 0) t_dec = -t_dec;
+    // Leggiamo e stampiamo i dati del sensore SOLO quando la console e' in stato CONSOLE_STATE_OFF
+    ConsoleState_t currState = Console_GetState(&console);
 
-        int32_t p_int = (int32_t)data.pressure;
-        int32_t p_dec = (int32_t)((data.pressure - (float)p_int) * 10.0f);
-        if (p_dec < 0) p_dec = -p_dec;
-
-        if (data.type == SENSOR_TYPE_BME280) {
-          int32_t h_int = (int32_t)data.humidity;
-          int32_t h_dec = (int32_t)((data.humidity - (float)h_int) * 10.0f);
-          if (h_dec < 0) h_dec = -h_dec;
-
-          printf("[SENSOR] BME280 -> Temp: %ld.%ld C | Press: %ld.%ld hPa | Umidita': %ld.%ld %%\r\n",
-                 (long)t_int, (long)t_dec, (long)p_int, (long)p_dec, (long)h_int, (long)h_dec);
-        } else {
-          printf("[SENSOR] BMP280 -> Temp: %ld.%ld C | Press: %ld.%ld hPa\r\n",
-                 (long)t_int, (long)t_dec, (long)p_int, (long)p_dec);
+    if (currState == CONSOLE_STATE_OFF) {
+      if (!sensor_ready) {
+        sensor_ready = BME280_Init();
+        if (sensor_ready) {
+          BME280_Data_t initData;
+          BME280_GetLatestData(&initData);
+          if (initData.type == SENSOR_TYPE_BME280) {
+            printf("[SENSOR] [CONNESSO] Sensore BME280 riconosciuto e attivo (T, P, RH)!\r\n");
+          } else {
+            printf("[SENSOR] [CONNESSO] Sensore BMP280 riconosciuto e attivo (T, P)!\r\n");
+          }
         }
       } else {
-        printf("[SENSOR] [ERRORE] Comunicazione I2C persa, tentero' la riconnessione...\r\n");
-        sensor_ready = false;
+        BME280_Data_t data;
+        if (BME280_Read(&data)) {
+          int32_t t_int = (int32_t)data.temperature;
+          int32_t t_dec = (int32_t)((data.temperature - (float)t_int) * 10.0f);
+          if (t_dec < 0) t_dec = -t_dec;
+
+          int32_t p_int = (int32_t)data.pressure;
+          int32_t p_dec = (int32_t)((data.pressure - (float)p_int) * 10.0f);
+          if (p_dec < 0) p_dec = -p_dec;
+
+          if (data.type == SENSOR_TYPE_BME280) {
+            int32_t h_int = (int32_t)data.humidity;
+            int32_t h_dec = (int32_t)((data.humidity - (float)h_int) * 10.0f);
+            if (h_dec < 0) h_dec = -h_dec;
+
+            printf("[SENSOR] BME280 -> Temp: %ld.%ld C | Press: %ld.%ld hPa | Umidita': %ld.%ld %%\r\n",
+                   (long)t_int, (long)t_dec, (long)p_int, (long)p_dec, (long)h_int, (long)h_dec);
+          } else {
+            printf("[SENSOR] BMP280 -> Temp: %ld.%ld C | Press: %ld.%ld hPa\r\n",
+                   (long)t_int, (long)t_dec, (long)p_int, (long)p_dec);
+          }
+        } else {
+          printf("[SENSOR] [ERRORE] Comunicazione I2C persa, tentero' la riconnessione...\r\n");
+          sensor_ready = false;
+        }
       }
     }
 

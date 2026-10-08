@@ -94,7 +94,28 @@ static void HAL_FSMC_MspInit(void){
   /* Peripheral clock enable */
   __HAL_RCC_FSMC_CLK_ENABLE();
 
- 
+  /** FSMC GPIO Configuration
+  PE7   ------> FSMC_D4
+  PE8   ------> FSMC_D5
+  PE9   ------> FSMC_D6
+  PE10   ------> FSMC_D7
+  PE11   ------> FSMC_D8
+  PE12   ------> FSMC_D9
+  PE13   ------> FSMC_D10
+  PE14   ------> FSMC_D11
+  PE15   ------> FSMC_D12
+  PD8   ------> FSMC_D13
+  PD9   ------> FSMC_D14
+  PD10   ------> FSMC_D15
+  PD13   ------> FSMC_A18
+  PD14   ------> FSMC_D0
+  PD15   ------> FSMC_D1
+  PD0   ------> FSMC_D2
+  PD1   ------> FSMC_D3
+  PD4   ------> FSMC_NOE
+  PD5   ------> FSMC_NWE
+  PD7   ------> FSMC_NE1
+  */
   /* GPIO_InitStruct */
   GPIO_InitStruct.Pin = GPIO_PIN_7|GPIO_PIN_8|GPIO_PIN_9|GPIO_PIN_10
                           |GPIO_PIN_11|GPIO_PIN_12|GPIO_PIN_13|GPIO_PIN_14
@@ -145,7 +166,28 @@ static void HAL_FSMC_MspDeInit(void){
   /* Peripheral clock enable */
   __HAL_RCC_FSMC_CLK_DISABLE();
 
- 
+  /** FSMC GPIO Configuration
+  PE7   ------> FSMC_D4
+  PE8   ------> FSMC_D5
+  PE9   ------> FSMC_D6
+  PE10   ------> FSMC_D7
+  PE11   ------> FSMC_D8
+  PE12   ------> FSMC_D9
+  PE13   ------> FSMC_D10
+  PE14   ------> FSMC_D11
+  PE15   ------> FSMC_D12
+  PD8   ------> FSMC_D13
+  PD9   ------> FSMC_D14
+  PD10   ------> FSMC_D15
+  PD13   ------> FSMC_A18
+  PD14   ------> FSMC_D0
+  PD15   ------> FSMC_D1
+  PD0   ------> FSMC_D2
+  PD1   ------> FSMC_D3
+  PD4   ------> FSMC_NOE
+  PD5   ------> FSMC_NWE
+  PD7   ------> FSMC_NE1
+  */
 
   HAL_GPIO_DeInit(GPIOE, GPIO_PIN_7|GPIO_PIN_8|GPIO_PIN_9|GPIO_PIN_10
                           |GPIO_PIN_11|GPIO_PIN_12|GPIO_PIN_13|GPIO_PIN_14
@@ -169,4 +211,10 @@ void HAL_SRAM_MspDeInit(SRAM_HandleTypeDef* sramHandle){
 
   /* USER CODE END SRAM_MspDeInit 1 */
 }
+/**
+  * @}
+  */
 
+/**
+  * @}
+  */

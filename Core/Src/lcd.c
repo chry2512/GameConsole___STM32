@@ -1036,10 +1036,10 @@ void LCD_Render(const Game_t *game, const Console_t *console)
 
           if (sData.type == SENSOR_TYPE_BME280) {
             int32_t h_int = (int32_t)sData.humidity;
-            snprintf(envStr, sizeof(envStr), "T:%ld.%ld C | P:%ld hPa | U:%ld%%", 
+            snprintf(envStr, sizeof(envStr), "T:%ld.%ld C | P:%ld mBar | U:%ld%%", 
                      (long)t_int, (long)t_dec, (long)p_int, (long)h_int);
           } else {
-            snprintf(envStr, sizeof(envStr), "TEMP: %ld.%ld C | PRESS: %ld hPa", 
+            snprintf(envStr, sizeof(envStr), "T: %ld.%ld C | P: %ld mBar", 
                      (long)t_int, (long)t_dec, (long)p_int);
           }
         } else {
