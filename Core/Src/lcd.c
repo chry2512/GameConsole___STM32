@@ -154,7 +154,7 @@ static const uint8_t *glyph(char character)
   return blank;
 }
 /**
- * @brief Draws a text string 
+ * Draws a text string 
  */
 static void draw_text(uint16_t x, uint16_t y, const char *text, uint16_t color, uint8_t scale)
 {
@@ -173,7 +173,7 @@ static void draw_text(uint16_t x, uint16_t y, const char *text, uint16_t color, 
 }
 
 /**
- * @brief Draws horizontally centered text 
+ * Draws horizontally centered text 
  */
 static void draw_text_centered(uint16_t y, const char *text, uint16_t color, uint8_t scale)
 {
@@ -184,7 +184,7 @@ static void draw_text_centered(uint16_t y, const char *text, uint16_t color, uin
 }
 
 /**
- * @brief Streams and renders an  image stored in external SPI Flash.
+ *  Streams and renders an  image stored in external SPI Flash.
  */
 static void draw_flash_image(uint32_t flashAddress, uint16_t x0, uint16_t y0, uint16_t width, uint16_t height)
 {
@@ -229,7 +229,7 @@ static void draw_flash_image(uint32_t flashAddress, uint16_t x0, uint16_t y0, ui
 }
 
 /**
- * @brief Draws a full-screen grid background 
+ * Draws a full-screen grid background 
  */
 static void draw_background(uint16_t baseColor, uint16_t accentColor)
 {
@@ -239,9 +239,7 @@ static void draw_background(uint16_t baseColor, uint16_t accentColor)
 }
 
 /**
- * @brief Renders the full-screen 320x240 Cubeniro wallpaper.
- * Directly from internal Flash (instant and flawless) when ENABLE_INTERNAL_ASSETS_DATA is 1,
- * or streamed from external SPI Flash when 0.
+ * enders the full-screen 320x240 Cubeniro wallpaper.
  */
 static void draw_cubeniro_background(void)
 {
@@ -257,7 +255,7 @@ static void draw_cubeniro_background(void)
 }
 
 /**
- * @brief Renders the full-screen 320x240 Snake background wallpaper from external Flash.
+ *  Renders the full-screen 320x240 Snake background wallpaper from external Flash.
  */
 static void draw_snake_background(void)
 {
@@ -577,7 +575,7 @@ static void draw_victory_overlay(const Game_t *game, const Console_t *console)
     draw_text(45U, 96U + (i * 12U), rowStr, COLOR_WHITE, 1U);
   }
 
-  // 3 Botton (stessi tasti del GameOver: RESTART, VIEW SCORE, RETURN HOME)
+  // Draw the buttons win panel
   bool restartSel = (console->gameOverBtn == GAMEOVER_BTN_RESTART);
   bool viewScoreSel = (console->gameOverBtn == GAMEOVER_BTN_VIEW_SCORE);
   bool returnSel = (console->gameOverBtn == GAMEOVER_BTN_RETURN_START);
@@ -845,11 +843,11 @@ static uint32_t last_clock_sec = 0xFFFFFFFFUL;
 void LCD_Sleep(void)
 {
 #if LCD_POWER_SAVE_DEMO_MODE
-  // DEMO MODE: Pure black screen (prevents white display when backlight is permanently 3.3V)
+ 
   fill_rect(0, 0, TFT_WIDTH, TFT_HEIGHT, 0x0000U);
   HAL_Delay(5U);
 #else
-  // HARDWARE SLEEP MODE: Native ILI9341 commands for true power saving
+  
   write_command(0x28); // Display OFF
   HAL_Delay(5U);
   write_command(0x10); // Enter Sleep Mode
@@ -860,7 +858,7 @@ void LCD_Sleep(void)
 void LCD_Wakeup(void)
 {
 #if LCD_POWER_SAVE_DEMO_MODE
-  // DEMO MODE: No controller wakeup commands required
+
   HAL_Delay(10U);
 #else
   // HARDWARE SLEEP MODE: Restore ILI9341 controller
@@ -869,7 +867,7 @@ void LCD_Wakeup(void)
   write_command(0x29); // Display ON
   HAL_Delay(20U);
 #endif
-  // Reset window coordinates to standard full screen
+
   set_window(0U, 0U, TFT_WIDTH - 1U, TFT_HEIGHT - 1U);
   last_rendered_state = (ConsoleState_t)-1;
   last_clock_sec = 0xFFFFFFFFUL;

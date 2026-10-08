@@ -104,11 +104,7 @@ void HAL_SPI_MspDeInit(SPI_HandleTypeDef* spiHandle)
     /* Peripheral clock disable */
     __HAL_RCC_SPI1_CLK_DISABLE();
 
-    /**SPI1 GPIO Configuration
-    PB3     ------> SPI1_SCK
-    PB4     ------> SPI1_MISO
-    PB5     ------> SPI1_MOSI
-    */
+    
     HAL_GPIO_DeInit(GPIOB, GPIO_PIN_3|GPIO_PIN_4|GPIO_PIN_5);
 
     /* SPI1 interrupt Deinit */

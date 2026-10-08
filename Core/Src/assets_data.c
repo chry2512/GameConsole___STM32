@@ -1,7 +1,4 @@
-/* GENERATED FROM CUBE3.JPEG (100% ORIGINAL COLORS AND BACKGROUND) */
-#include "assets_data.h"
-
-#if ENABLE_INTERNAL_ASSETS_DATA
+/* GENERATED FROM SWIFT TOOLS - DO NOT EDIT */
 
 const uint8_t asset_cubeniro_rgb565[153600] __attribute__((aligned(4))) = {
   0xB5U, 0xB6U, 0xB5U, 0xB6U, 0xB5U, 0xB6U, 0xB5U, 0xD6U, 0xB5U, 0xB6U, 0xB5U, 0xB6U, 0xB5U, 0xB6U, 0xBDU, 0xD7U,
@@ -19209,4 +19206,4 @@ const uint8_t asset_snake_rgb565[153600] __attribute__((aligned(4))) = {
   0xD9U, 0xE9U, 0xD1U, 0xE9U, 0xD2U, 0x09U, 0xD2U, 0x09U, 0xDAU, 0x2AU, 0xD2U, 0x2AU, 0xD2U, 0x2AU, 0xD2U, 0x2AU,
 };
 
-#endif /* ENABLE_INTERNAL_ASSETS_DATA */
+#endif 

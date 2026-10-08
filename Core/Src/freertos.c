@@ -129,11 +129,7 @@ void StartSensorTask(void *argument);
 
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
 
-/**
-  * @brief  FreeRTOS initialization
-  * @param  None
-  * @retval None
-  */
+
 void MX_FREERTOS_Init(void) {
   /* USER CODE BEGIN Init */
 
@@ -194,13 +190,7 @@ void MX_FREERTOS_Init(void) {
 
 }
 
-/* USER CODE BEGIN Header_StartInputTask */
-/**
-  * @brief  Function implementing the inputTask thread.
-  * @param  argument: Not used
-  * @retval None
-  */
-/* USER CODE END Header_StartInputTask */
+
 void StartInputTask(void *argument)
 {
   /* USER CODE BEGIN StartInputTask */
@@ -221,13 +211,7 @@ void StartInputTask(void *argument)
   /* USER CODE END StartInputTask */
 }
 
-/* USER CODE BEGIN Header_StartGameLogicTask */
-/**
-* @brief Function implementing the GameLogicTask thread.
-* @param argument: Not used
-* @retval None
-*/
-/* USER CODE END Header_StartGameLogicTask */
+
 void StartGameLogicTask(void *argument)
 {
   /* USER CODE BEGIN StartGameLogicTask */
@@ -317,19 +301,13 @@ void StartGameLogicTask(void *argument)
   /* USER CODE END StartGameLogicTask */
 }
 
-/* USER CODE BEGIN Header_StartRenderTask */
-/**
-* @brief Function implementing the RenderTask thread.
-* @param argument: Not used
-* @retval None
-*/
-/* USER CODE END Header_StartRenderTask */
+
 void StartRenderTask(void *argument)
 {
   /* USER CODE BEGIN StartRenderTask */
   (void) argument;
   
-  // 1. Setup Hardware Display/Flash SPI
+
   LCD_Init();
   ExternalFlash_Init();
   ExternalFlash_EnsureAssetsProgrammed();
@@ -347,19 +325,13 @@ void StartRenderTask(void *argument)
   /* USER CODE END StartRenderTask */
 }
 
-/* USER CODE BEGIN Header_StartSensorTask */
-/**
-* @brief Function implementing the SensorTask thread.
-* @param argument: Not used
-* @retval None
-*/
-/* USER CODE END Header_StartSensorTask */
+
 void StartSensorTask(void *argument)
 {
   /* USER CODE BEGIN StartSensorTask */
   (void) argument;
 
-  // Attesa breve per stabilizzazione alimentazione e bus I2C
+
   osDelay(150U);
 
   bool sensor_ready = false;
@@ -406,7 +378,7 @@ void StartSensorTask(void *argument)
       }
     }
 
-    osDelay(2000U); // Campionamento / retry ogni 2 secondi
+    osDelay(2000U); 
   }
   /* USER CODE END StartSensorTask */
 }

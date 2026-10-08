@@ -17,7 +17,7 @@
 #define BME280_I2C_ADDR_PRIM     (0x76U << 1)
 #define BME280_I2C_ADDR_SEC      (0x77U << 1)
 
-// Calibration parameters from NVM
+
 typedef struct {
   uint16_t dig_T1;
   int16_t  dig_T2;
@@ -60,7 +60,7 @@ static bool write_register(uint8_t reg, uint8_t value) {
 static bool read_calibration_data(void) {
   uint8_t buf[26];
 
-  // 1. Read Temp & Pressure calibration (0x88 to 0x9D)
+  // 1. Read Temp & Pressure calibration 
   if (!read_registers(0x88U, buf, 24U)) return false;
   calib.dig_T1 = (uint16_t)((buf[1] << 8) | buf[0]);
   calib.dig_T2 = (int16_t)((buf[3] << 8) | buf[2]);
@@ -77,10 +77,8 @@ static bool read_calibration_data(void) {
   calib.dig_P9 = (int16_t)((buf[23] << 8) | buf[22]);
 
   if (detected_type == SENSOR_TYPE_BME280) {
-    // Read H1 (0xA1)
-    if (!read_registers(0xA1U, &calib.dig_H1, 1U)) return false;
 
-    // Read H2..H6 (0xE1..0xE7)
+    if (!read_registers(0xA1U, &calib.dig_H1, 1U)) return false;
     uint8_t hbuf[7];
     if (!read_registers(0xE1U, hbuf, 7U)) return false;
     calib.dig_H2 = (int16_t)((hbuf[1] << 8) | hbuf[0]);
@@ -93,38 +91,31 @@ static bool read_calibration_data(void) {
   return true;
 }
 
-/**
- * @brief Esegue il recovery del bus I2C generando 9 impulsi di clock su SCL
- *        per sbloccare eventuali slave rimasti bloccati con SDA a LOW.
- */
+
 static void i2c_bus_recovery(void) {
   GPIO_InitTypeDef GPIO_InitStruct = {0};
 
-  // Disabilita periferica I2C1
   __HAL_I2C_DISABLE(&hi2c1);
 
-  // Configura PB6 (SCL) come GPIO Output Open-Drain con Pull-Up
+
   GPIO_InitStruct.Pin = GPIO_PIN_6;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_OD;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-  // Configura PB7 (SDA) come Input con Pull-Up
+ 
   GPIO_InitStruct.Pin = GPIO_PIN_7;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-  // Genera 9 impulsi di clock su SCL per liberare SDA
   for (uint8_t i = 0; i < 9; i++) {
     HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_RESET);
     for (volatile uint32_t d = 0; d < 100; d++);
     HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_SET);
     for (volatile uint32_t d = 0; d < 100; d++);
-  }
 
-  // Genera una condizione di STOP (SDA LOW -> SCL HIGH -> SDA HIGH)
   GPIO_InitStruct.Pin = GPIO_PIN_7;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_OD;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
@@ -136,7 +127,6 @@ static void i2c_bus_recovery(void) {
   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_7, GPIO_PIN_SET);
   for (volatile uint32_t d = 0; d < 100; d++);
 
-  // Re-inizializza I2C1 in modalita' hardware
   HAL_I2C_DeInit(&hi2c1);
   MX_I2C1_Init();
 }
@@ -148,14 +138,13 @@ bool BME280_Init(void) {
   detected_type = SENSOR_TYPE_NONE;
   active_i2c_addr = 0U;
 
-  // 1. Esegui bus recovery per garantire che le linee SDA/SCL siano pulite
   i2c_bus_recovery();
 
   printf("[I2C] Ricerca sensore ambientale su I2C1 (PB6/PB7)...\r\n");
 
   for (int i = 0; i < 2; i++) {
     uint16_t test_addr = probe_addrs[i];
-    // Lettura diretta del registro Chip ID (0xD0)
+    
     chip_id = 0U;
     HAL_StatusTypeDef st = HAL_I2C_Mem_Read(&hi2c1, test_addr, BME280_REG_CHIP_ID, 
                                             I2C_MEMADD_SIZE_8BIT, &chip_id, 1U, 50U);
@@ -184,36 +173,32 @@ bool BME280_Init(void) {
   printf("[I2C] [SUCCESSO] Rilevato sensore: %s all'indirizzo 0x%02X (ID=0x%02X)\r\n", 
          type_name, (active_i2c_addr >> 1), chip_id);
 
-  // Soft Reset
-  write_register(BME280_REG_RESET, 0xB6U);
-  HAL_Delay(30U); // Tempo necessario per NVM reload dopo soft reset
 
-  // Read calibration coefficients
+  write_register(BME280_REG_RESET, 0xB6U);
+  HAL_Delay(30U); 
+
   if (!read_calibration_data()) {
     printf("[I2C] [ERRORE] Lettura coefficienti calibrazione fallita!\r\n");
     return false;
   }
 
-  // Bosch Datasheet recommended "Indoor / Forced Mode" profile:
-  // In Forced Mode, il sensore dorme al 100% (zero autoriscaldamento).
-  // Ad ogni richiesta viene svegliato per una singola misura e torna a dormire subito.
+
 
   if (detected_type == SENSOR_TYPE_BME280) {
-    // ctrl_hum (0xF2): osrs_h = 1 (oversampling x1)
+   
     write_register(BME280_REG_CTRL_HUM, 0x01U);
   }
 
-  // config (0xF5): IIR filter = x2 (0x04) per stabilizzare le correnti d'aria della stanza
+
   write_register(BME280_REG_CONFIG, 0x04U);
 
-  // Inizializza in Sleep Mode (mode = 00): il chip dorme fino alla prima lettura
+
   write_register(BME280_REG_CTRL_MEAS, 0x24U);
 
   printf("[I2C] Sensore configurato in modalita' FORCED MODE (Zero Self-Heating)\r\n");
   return true;
 }
 
-// Compensation formulas from Bosch Sensortec Datasheet
 static float compensate_temperature(int32_t adc_T) {
   int32_t var1 = ((((adc_T >> 3) - ((int32_t)calib.dig_T1 << 1))) * ((int32_t)calib.dig_T2)) >> 11;
   int32_t var2 = (((((adc_T >> 4) - ((int32_t)calib.dig_T1)) * ((adc_T >> 4) - ((int32_t)calib.dig_T1))) >> 12) *
@@ -239,7 +224,7 @@ static float compensate_pressure(int32_t adc_P) {
   var2 = (((int64_t)calib.dig_P8) * p) >> 19;
   p = ((p + var1 + var2) >> 8) + (((int64_t)calib.dig_P7) << 4);
 
-  return (float)p / 25600.0f; // in hPa
+  return (float)p / 25600.0f; 
 }
 
 static float compensate_humidity(int32_t adc_H) {
@@ -258,11 +243,10 @@ static float compensate_humidity(int32_t adc_H) {
 bool BME280_Read(BME280_Data_t *data) {
   if (data == NULL || detected_type == SENSOR_TYPE_NONE) return false;
 
-  // 1. Risveglia il sensore richiedendo una singola misura (FORCED MODE: mode = 01 -> 0x25)
-  // osrs_t = 1 (x1), osrs_p = 1 (x1), mode = 1 (Forced) -> 0x25
+  
   write_register(BME280_REG_CTRL_MEAS, 0x25U);
 
-  // Attesa completamento singola conversione (~12ms per x1 oversampling)
+  
   HAL_Delay(15U);
 
   uint8_t raw[8];
@@ -280,7 +264,7 @@ bool BME280_Read(BME280_Data_t *data) {
     adc_H = (int32_t)((((uint32_t)raw[6]) << 8) | ((uint32_t)raw[7]));
   }
 
-  // Stampa diagnostica dei dati grezzi dal chip
+  
   static uint8_t raw_print_cnt = 0U;
   if (++raw_print_cnt >= 2U) {
     printf("[I2C RAW] T_raw=0x%lX, P_raw=0x%lX, H_raw=0x%lX\r\n", 
@@ -288,7 +272,6 @@ bool BME280_Read(BME280_Data_t *data) {
     raw_print_cnt = 0U;
   }
 
-  // Se la conversione non e' ancora pronta, il chip restituisce 0x80000 per T/P
   if (adc_T == 0x80000 || adc_T == 0) {
     printf("[I2C] [ATTESA] Conversione in corso (T_raw=0x%lX)\r\n", (unsigned long)adc_T);
     data->valid = false;

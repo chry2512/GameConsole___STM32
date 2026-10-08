@@ -2,8 +2,8 @@
 #include "main.h"
 #include "spi.h"
 
-#define TOUCH_CMD_READ_X 0x90U // Canale X, 12-bit, Differential
-#define TOUCH_CMD_READ_Y 0xD0U // Canale Y, 12-bit, Differential
+#define TOUCH_CMD_READ_X 0x90U 
+#define TOUCH_CMD_READ_Y 0xD0U 
 
 static void touch_select(void) {
   HAL_GPIO_WritePin(TOUCH_CS_PIN_GPIO_Port, TOUCH_CS_PIN_Pin, GPIO_PIN_RESET);

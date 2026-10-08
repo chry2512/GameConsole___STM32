@@ -231,7 +231,7 @@ static bool flash_verify_block(uint32_t flashAddr, const uint8_t *expectedData, 
 #endif
 
 /**
- * @brief IF ENABLE_INTERNAL_ASSETS_DATA is set to 1, this function checks if the assets are already programmed 
+ *  IF ENABLE_INTERNAL_ASSETS_DATA is set to 1, this function checks if the assets are already programmed 
  */
 bool ExternalFlash_EnsureAssetsProgrammed(void) {
   if (!ExternalFlash_IsReady()) {

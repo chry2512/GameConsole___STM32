@@ -4,10 +4,8 @@
 #include "console.h"
 
 /* LCD POWER SAVE MODE CONFIGURATION:
- * 1 -> DEMO MODE (Software Blackout):
- *      Fills screen with pure black, ideal for demos where LCD backlight is hardwired to 3.3V.
- * 0 -> HARDWARE SLEEP MODE (Native ILI9341 commands):
- *      Sends 0x28 (Display OFF) and 0x10 (Sleep In) for true hardware power saving.
+ * 1 -> DEMO MODE 
+ * 0 -> HARDWARE SLEEP MODE 
  */
 #define LCD_POWER_SAVE_DEMO_MODE 1
 

@@ -68,7 +68,7 @@ extern TIM_HandleTypeDef htim6;
 /*           Cortex-M4 Processor Interruption and Exception Handlers          */
 /******************************************************************************/
 /**
-  * @brief This function handles Non maskable interrupt.
+  * This function handles Non maskable interrupt.
   */
 void NMI_Handler(void)
 {
@@ -113,7 +113,7 @@ void MemManage_Handler(void)
 }
 
 /**
-  * @brief This function handles Pre-fetch fault, memory access fault.
+  * This function handles Pre-fetch fault, memory access fault.
   */
 void BusFault_Handler(void)
 {
@@ -128,7 +128,7 @@ void BusFault_Handler(void)
 }
 
 /**
-  * @brief This function handles Undefined instruction or illegal state.
+  * This function handles Undefined instruction or illegal state.
   */
 void UsageFault_Handler(void)
 {
@@ -143,7 +143,7 @@ void UsageFault_Handler(void)
 }
 
 /**
-  * @brief This function handles Debug monitor.
+  * This function handles Debug monitor.
   */
 void DebugMon_Handler(void)
 {
@@ -163,7 +163,7 @@ void DebugMon_Handler(void)
 /******************************************************************************/
 
 /**
-  * @brief This function handles EXTI line3 interrupt.
+  * This function handles EXTI line3 interrupt.
   */
 void EXTI3_IRQHandler(void)
 {
@@ -177,7 +177,7 @@ void EXTI3_IRQHandler(void)
 }
 
 /**
-  * @brief This function handles EXTI line[9:5] interrupts.
+  * This function handles EXTI line[9:5] interrupts.
   */
 void EXTI9_5_IRQHandler(void)
 {
@@ -191,7 +191,7 @@ void EXTI9_5_IRQHandler(void)
 }
 
 /**
-  * @brief This function handles SPI1 global interrupt.
+  * @ This function handles SPI1 global interrupt.
   */
 void SPI1_IRQHandler(void)
 {
@@ -205,7 +205,7 @@ void SPI1_IRQHandler(void)
 }
 
 /**
-  * @brief This function handles USART1 global interrupt.
+  *  This function handles USART1 global interrupt.
   */
 void USART1_IRQHandler(void)
 {
@@ -219,7 +219,7 @@ void USART1_IRQHandler(void)
 }
 
 /**
-  * @brief This function handles TIM6 global interrupt, DAC1 and DAC2 underrun error interrupts.
+  * This function handles TIM6 global interrupt, DAC1 and DAC2 underrun error interrupts.
   */
 void TIM6_DAC_IRQHandler(void)
 {
@@ -233,7 +233,7 @@ void TIM6_DAC_IRQHandler(void)
 }
 
 /**
-  * @brief This function handles DMA2 stream0 global interrupt.
+  * This function handles DMA2 stream0 global interrupt.
   */
 void DMA2_Stream0_IRQHandler(void)
 {
