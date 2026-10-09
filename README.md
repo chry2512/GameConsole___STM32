@@ -139,17 +139,31 @@ In questa sezione sono raccolte le dimostrazioni video del funzionamento della c
 
 4. **SWD (Serial Wire Debug)**: Debug Seriale
    <!-- [Link Video 2 --->
-5. **UART Telemetry & Logs**: Monitor seriale 
-   <!-- [Link Video 3  -->
-6. **I2C - BME280 Environmental Sensor**: Rilevazione live di temperatura, pressione 
-   <!-- [Link Video 4  -->
-7. **SPI - External Flash (W25Qxx)**: Lettura degli asset grafici with/any internal asset
-   <!-- [Link Video 5 -->
-8. **SPI -  Touch Screen (XPT2046)**:
-   <!-- [Link Video 6 -->
-9. **Error Handling**:
+5. **UART Telemetry & Logs**: Monitor seriale
 
-10. **Stop Mode**
+
+https://github.com/user-attachments/assets/4093a128-0031-4e1a-bbd4-c421b6158af8
+
+
+7. **I2C - BME280 Environmental Sensor**: Rilevazione live di temperatura, pressione 
+   <!-- [Link Video 4  -->
+8. **SPI - External Flash (W25Qxx)**: Lettura degli asset grafici with/any internal asset
+   -INTERNAL ASSET MODE ON
+   
+   <img width="623" height="122" alt="Screenshot 2026-10-07 alle 17 26 51" src="https://github.com/user-attachments/assets/b7f63aa1-a5f8-42a8-b254-dd922c4a6a2c" />
+
+
+   -INTERNAL ASSET MODE OFF EXTERNAL FLASH
+
+      <img width="650" height="133" alt="Screenshot 2026-10-07 alle 17 26 28" src="https://github.com/user-attachments/assets/4751a106-b4ed-42fd-a9fd-7f11e9940650" />
+
+
+
+10. **SPI -  Touch Screen (XPT2046)**:
+   <!-- [Link Video 6 -->
+11. **Error Handling**:
+
+12. **Stop Mode**
    
 https://github.com/user-attachments/assets/10bd0c1f-33fd-4cc3-895b-ed0fa7daf5c0
 
