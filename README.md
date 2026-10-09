@@ -162,7 +162,7 @@ https://github.com/user-attachments/assets/4093a128-0031-4e1a-bbd4-c421b6158af8
 https://github.com/user-attachments/assets/8558fc26-7a70-4fd1-92ef-c2e536edfbdc
 
 
-9. **SPI - External Flash (W25Qxx)**: Lettura degli asset grafici with/any internal asset
+9. **SPI - External Flash**: Lettura degli asset grafici with/any internal asset
    -INTERNAL ASSET MODE ON
    
    <img width="623" height="122" alt="Screenshot 2026-10-07 alle 17 26 51" src="https://github.com/user-attachments/assets/b7f63aa1-a5f8-42a8-b254-dd922c4a6a2c" />
@@ -174,7 +174,7 @@ https://github.com/user-attachments/assets/8558fc26-7a70-4fd1-92ef-c2e536edfbdc
 
 
 
-10. **SPI -  Touch Screen (XPT2046)**:
+10. **SPI -  Touch Screen**:
 
 
 
