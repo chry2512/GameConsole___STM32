@@ -88,7 +88,7 @@ La **comunicazione seriale** è un metodo di trasferimento di dati in cui i bit 
 
 ### 5. FSMC (Flexible Static Memory Controller) - Bus Display Parallelo
 
-- **Definizione Tecnica**: Controller hardware integrato nell'STM32F4 che mappa periferiche di memoria esterne (SRAM, NOR Flash, LCD) direttamente nello spazio di indirizzamento della CPU (Bank 1). 
+- **Definizione Tecnica**: Controller hardware integrato nell'STM32F4 che mappa periferiche di memoria esterne (SRAM, NOR Flash, LCD) direttamente nello spazio di indirizzamento della CPU . 
 
 - **Utilizzo nel Progetto**: Pilota il display LCD TFT 320x240 con bus dati a **16-bit**. Consente di aggiornare lo schermo ad altissimo framerate (30+ FPS) senza alcun rallentamento della CPU.
 
