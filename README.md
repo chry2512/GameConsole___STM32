@@ -1,7 +1,3 @@
-
-
-https://github.com/user-attachments/assets/7a24d2b6-cf41-4a7b-a7a7-e9c5f598c1ce
-
 STM32 Retro Game Console (Snake)
 
 ## Panoramica del Progetto
