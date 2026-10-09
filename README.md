@@ -1,3 +1,7 @@
+
+
+https://github.com/user-attachments/assets/7a24d2b6-cf41-4a7b-a7a7-e9c5f598c1ce
+
 STM32 Retro Game Console (Snake)
 
 ## Panoramica del Progetto
@@ -145,5 +149,8 @@ In questa sezione sono raccolte le dimostrazioni video del funzionamento della c
    <!-- [Link Video 5 -->
 6. **SPI -  Touch Screen (XPT2046)**:
    <!-- [Link Video 6 -->
-7. **Error Handling**: 
-   <!-- [Link Video 7 -->
+7. **Error Handling**:
+8. 
+https://github.com/user-attachments/assets/8ba85e80-d9d5-49b8-a681-5b27ea3b87f0
+
+
