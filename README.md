@@ -2,12 +2,12 @@ STM32 Retro Game Console (Snake)
 
 ## Panoramica del Progetto
 Questo progetto implementa una console di gioco portatile embedded basata su microcontrollore **STM32F407VET6** (Cortex-M4/68 MHz) con sistema operativo real-time **FreeRTOS**.
-La console esegue il celebre gioco **Snake**, arricchito da grafica personalizzata a colori , controllo analogico tramite joystick a 2 assi, interazione touchscreen resistiva, feedback visivo tramite LED di stato, salvataggio persistente su memoria Flash SPI esterna (W25Qxx) e monitoraggio ambientale in tempo reale tramite sensore  BME280.
+La console esegue il celebre gioco **Snake**, arricchito da grafica personalizzata a colori , controllo analogico tramite joystick a 2 assi, interazione touchscreen resistiva, feedback visivo tramite LED di stato, salvataggio persistente su memoria Flash SPI esterna  e monitoraggio ambientale in tempo reale tramite sensore  BME280.
 
 ## Fondamenti Tecnologici 
 
 ### 1. GPIO (General-Purpose Input/Output)
-- **Definizione Tecnica**: Le GPIO (General Purpose Input/Output) sono i canali di comunicazione di STM32 con il mondo esterno. Sono pin digitali configurabili via software in modalità Input o Output, oltre a modalità alternate (AF) per instradare segnali periferici.
+- **Definizione Tecnica**: Le GPIO (General Purpose Input/Output) sono i canali di comunicazione di STM32 con il mondo esterno. Sono pin digitali configurabili via software in modalità Input o Output, oltre a modalità alternate per instradare segnali periferici.
 
 - **Utilizzo nel Progetto**: Gestione diretta dei Chip Select (`PB0` per Flash, `PB12` per Touch), pilotaggio dei LED di stato (`PA6`, `PA7`), lettura del pulsante joystick (`PE1`) e pin di interrupt.
 
@@ -69,7 +69,7 @@ La **comunicazione seriale** è un metodo di trasferimento di dati in cui i bit 
   - Utilizzata per l'output di diagnostica e telemetria real-time (tramite reindirizzamento di `printf`), logging dello stato della console, punteggio di gioco, coordinate touch e misurazioni ambientali.
 
 ### 3. SPI (Serial Peripheral Interface)
-- **Definizione Tecnica**: Protocollo seriale sincrono che supporta la comunicazione full-duplex ad alta velocità tra un master e uno o più dispositivi slave. Richiede quattro fili di comunicazione: MOSI, MISO, SCLK e SS.
+- **Definizione Tecnica**: Protocollo seriale sincrono che supporta la comunicazione full-duplex ad alta velocità tra un master e uno o più dispositivi slave. Richiede quattro fili di comunicazione: MOSI, MISO, SCLK e CS.
 
 - **Utilizzo nel Progetto**:
   - **SPI1 (PB3=SCK, PB4=MISO, PB5=MOSI, PB0=CS)**: Dedicata alla **memoria Flash esterna**. 
@@ -105,16 +105,15 @@ Il software è strutturato secondo una pipeline deterministica a task cooperativ
 
 | **GameLogicTask** | Normal | 20 ms (50 Hz) | Macchina a stati della console (`OFF`, `LOAD`, `START`, `NAME`, `DIFFICULTY`, `GAME`, `LEADERBOARD`), collisioni e logica di Snake, gestione eventi touch e pulsanti. |
 
-| **InputTask** | AboveNormal | 20 ms (50 Hz) | Campionamento continuo ADC1 (DMA) del joystick, calibrazione della zona morta (deadzone), filtraggio e accodamento eventi. |
+| **InputTask** | AboveNormal | Campionamento continuo ADC1 (DMA) del joystick, calibrazione della zona morta (deadzone), filtraggio e accodamento eventi. |
 
-| **SensorTask** | Low | 2000 ms | Campionamento I2C del sensore BME280 in stato `OFF` con compensazione delle formule di calibrazione Bosch (Integer 64-bit e float) e stampa metrica. |
+| **SensorTask** | Low | Campionamento I2C del sensore BME280 in stato `OFF` . 
 
 ### Meccanismi di Sincronizzazione RTOS:
 - **`gameMutex`**: Mutex binario ricorsivo che protegge l'accesso concorrente alle strutture dati condivise di stato gioco (`SnakeGame_t`) e console (`Console_t`) tra il task di logica e il task di rendering grafico.
 
 - **`joystickQueue`**: Coda di messaggi (`osMessageQueue`) thread-safe per inviare i vettori direzionali elaborati da `InputTask` a `GameLogicTask`.
 
----
 
 # Macchina a Stati della Console 
 
