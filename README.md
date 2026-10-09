@@ -146,7 +146,11 @@ In questa sezione sono raccolte le dimostrazioni video del funzionamento della c
 6. **SPI -  Touch Screen (XPT2046)**:
    <!-- [Link Video 6 -->
 7. **Error Handling**:
-8. 
-https://github.com/user-attachments/assets/8ba85e80-d9d5-49b8-a681-5b27ea3b87f0
+
+8. ** Stop Mode**
+   
+https://github.com/user-attachments/assets/10bd0c1f-33fd-4cc3-895b-ed0fa7daf5c0
+
+
 
 
