@@ -133,21 +133,23 @@ Il software è strutturato secondo una pipeline deterministica a task cooperativ
 ## Video(Demo)
 In questa sezione sono raccolte le dimostrazioni video del funzionamento della console e dei singoli protocolli hardware implementati:
 
-1.  **Main GamePlay**: 
-   <!-- [Link Video 1  -->
-2. **SWD (Serial Wire Debug)**: Debug Seriale
-   <!-- [Link Video 2 --->
-3. **UART Telemetry & Logs**: Monitor seriale 
-   <!-- [Link Video 3  -->
-4. **I2C - BME280 Environmental Sensor**: Rilevazione live di temperatura, pressione 
-   <!-- [Link Video 4  -->
-5. **SPI - External Flash (W25Qxx)**: Lettura degli asset grafici with/any internal asset
-   <!-- [Link Video 5 -->
-6. **SPI -  Touch Screen (XPT2046)**:
-   <!-- [Link Video 6 -->
-7. **Error Handling**:
+1.  **Main GamePlay**:
+    
+  https://github.com/user-attachments/assets/0a80a3f9-e8f4-4771-bc51-829f2a95470c
 
-8. ** Stop Mode**
+4. **SWD (Serial Wire Debug)**: Debug Seriale
+   <!-- [Link Video 2 --->
+5. **UART Telemetry & Logs**: Monitor seriale 
+   <!-- [Link Video 3  -->
+6. **I2C - BME280 Environmental Sensor**: Rilevazione live di temperatura, pressione 
+   <!-- [Link Video 4  -->
+7. **SPI - External Flash (W25Qxx)**: Lettura degli asset grafici with/any internal asset
+   <!-- [Link Video 5 -->
+8. **SPI -  Touch Screen (XPT2046)**:
+   <!-- [Link Video 6 -->
+9. **Error Handling**:
+
+10. **Stop Mode**
    
 https://github.com/user-attachments/assets/10bd0c1f-33fd-4cc3-895b-ed0fa7daf5c0
 
