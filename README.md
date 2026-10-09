@@ -4,6 +4,30 @@ STM32 Retro Game Console (Snake)
 Questo progetto implementa una console di gioco portatile embedded basata su microcontrollore **STM32F407VET6** (Cortex-M4/68 MHz) con sistema operativo real-time **FreeRTOS**.
 La console esegue il celebre gioco **Snake**, arricchito da grafica personalizzata a colori , controllo analogico tramite joystick a 2 assi, interazione touchscreen resistiva, feedback visivo tramite LED di stato, salvataggio persistente su memoria Flash SPI esterna (W25Qxx) e monitoraggio ambientale in tempo reale tramite sensore  BME280.
 
+## Fondamenti Tecnologici 
+
+### 1. GPIO (General-Purpose Input/Output)
+- **Definizione Tecnica**: Le GPIO (General Purpose Input/Output) sono i canali di comunicazione di STM32 con il mondo esterno. Sono pin digitali configurabili via software in modalità Input o Output, oltre a modalità alternate (AF) per instradare segnali periferici.
+
+- **Utilizzo nel Progetto**: Gestione diretta dei Chip Select (`PB0` per Flash, `PB12` per Touch), pilotaggio dei LED di stato (`PA6`, `PA7`), lettura del pulsante joystick (`PE1`) e pin di interrupt.
+
+### 2. Sistemi Real-Time (RTOS)
+
+- **Definizione Tecnica**: Sistemi operativi in cui la correttezza del programma non dipende solo dal risultato logico del calcolo, ma anche dal rispetto rigoroso dei vincoli temporali (**deadline**). Utilizzano uno scheduler preemptive basato su priorità per garantire determinismo e tempi di latenza prevedibili, dividendo l'applicazione in thread indipendenti (Task).
+
+- **Utilizzo nel Progetto**: Implementato tramite **FreeRTOS** per orchestrare in modo parallelo e deterministico il rendering grafico a ~30 FPS, la logica di gioco a 50 Hz, il campionamento analogico dei comandi e la telemetria I2C, prevenendo blocchi della CPU.
+
+### 3. Interrupt (EXTI & NVIC)
+
+- **Definizione Tecnica**: Segnali asincroni hardware o software che sospendono temporaneamente il flusso di esecuzione ordinario del processore per eseguire una routine dedicata (**ISR** - Interrupt Service Routine), gestiti tramite il controllore prioritario vettorizzato (**NVIC**).
+
+- **Utilizzo nel Progetto**: Linea **EXTI3** (`PE3`) per l'accensione istantanea dal pulsante Power, linea **EXTI9_5** (`PC5`) per la rilevazione immediata della pressione del Touch Screen (PENIRQ), e interrupt di fine trasferimento DMA per l'ADC.
+
+### 4. HAL (Hardware Abstraction Layer)
+- **Definizione Tecnica**: Strato software intermedio fornito da STMicroelectronics che astrae i registri a basso livello del silicio fornendo API C standardizzate e portabili per configurare, avviare e gestire le periferiche hardware del microcontrollore.
+
+- **Utilizzo nel Progetto**: Utilizzato per inizializzare e controllare in sicurezza i bus di comunicazione (`HAL_SPI_*`, `HAL_I2C_*`, `HAL_UART_*`), la gestione dei pin (`HAL_GPIO_*`), le conversioni analogiche e la gestione energetica.
+
 
 ## Architettura Hardware 
 - **Microcontrollore Principale**: STM32F407VET6.
@@ -69,29 +93,7 @@ La **comunicazione seriale** è un metodo di trasferimento di dati in cui i bit 
 - **Utilizzo nel Progetto**: Pilota il display LCD TFT 320x240 con bus dati a **16-bit**. Consente di aggiornare lo schermo ad altissimo framerate (30+ FPS) senza alcun rallentamento della CPU.
 
 
-## Fondamenti Tecnologici 
 
-### 1. GPIO (General-Purpose Input/Output)
-- **Definizione Tecnica**: Le GPIO (General Purpose Input/Output) sono i canali di comunicazione di STM32 con il mondo esterno. Sono pin digitali configurabili via software in modalità Input o Output, oltre a modalità alternate (AF) per instradare segnali periferici.
-
-- **Utilizzo nel Progetto**: Gestione diretta dei Chip Select (`PB0` per Flash, `PB12` per Touch), pilotaggio dei LED di stato (`PA6`, `PA7`), lettura del pulsante joystick (`PE1`) e pin di interrupt.
-
-### 2. Sistemi Real-Time (RTOS)
-
-- **Definizione Tecnica**: Sistemi operativi in cui la correttezza del programma non dipende solo dal risultato logico del calcolo, ma anche dal rispetto rigoroso dei vincoli temporali (**deadline**). Utilizzano uno scheduler preemptive basato su priorità per garantire determinismo e tempi di latenza prevedibili, dividendo l'applicazione in thread indipendenti (Task).
-
-- **Utilizzo nel Progetto**: Implementato tramite **FreeRTOS** per orchestrare in modo parallelo e deterministico il rendering grafico a ~30 FPS, la logica di gioco a 50 Hz, il campionamento analogico dei comandi e la telemetria I2C, prevenendo blocchi della CPU.
-
-### 3. Interrupt (EXTI & NVIC)
-
-- **Definizione Tecnica**: Segnali asincroni hardware o software che sospendono temporaneamente il flusso di esecuzione ordinario del processore per eseguire una routine dedicata (**ISR** - Interrupt Service Routine), gestiti tramite il controllore prioritario vettorizzato (**NVIC**).
-
-- **Utilizzo nel Progetto**: Linea **EXTI3** (`PE3`) per l'accensione istantanea dal pulsante Power, linea **EXTI9_5** (`PC5`) per la rilevazione immediata della pressione del Touch Screen (PENIRQ), e interrupt di fine trasferimento DMA per l'ADC.
-
-### 4. HAL (Hardware Abstraction Layer)
-- **Definizione Tecnica**: Strato software intermedio fornito da STMicroelectronics che astrae i registri a basso livello del silicio fornendo API C standardizzate e portabili per configurare, avviare e gestire le periferiche hardware del microcontrollore.
-
-- **Utilizzo nel Progetto**: Utilizzato per inizializzare e controllare in sicurezza i bus di comunicazione (`HAL_SPI_*`, `HAL_I2C_*`, `HAL_UART_*`), la gestione dei pin (`HAL_GPIO_*`), le conversioni analogiche e la gestione energetica.
 
 ## Architettura Software Real-Time (FreeRTOS)
 
@@ -138,8 +140,10 @@ In questa sezione sono raccolte le dimostrazioni video del funzionamento della c
   https://github.com/user-attachments/assets/0a80a3f9-e8f4-4771-bc51-829f2a95470c
 
 4. **SWD (Serial Wire Debug)**: Debug Seriale
-   <!-- [Link Video 2 --->
-5. **UART Telemetry & Logs**: Monitor seriale
+
+   https://github.com/user-attachments/assets/56e714d9-2d30-4e40-b1a8-fadaffe74ecd
+   
+7. **UART Telemetry & Logs**: Monitor seriale
 
 
 https://github.com/user-attachments/assets/4093a128-0031-4e1a-bbd4-c421b6158af8
