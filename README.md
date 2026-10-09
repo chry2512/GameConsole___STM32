@@ -139,6 +139,13 @@ In questa sezione sono raccolte le dimostrazioni video del funzionamento della c
     
   https://github.com/user-attachments/assets/0a80a3f9-e8f4-4771-bc51-829f2a95470c
 
+
+  
+
+  https://github.com/user-attachments/assets/57bd332b-fcb9-4770-9672-fb0ddd7a7fb7
+
+
+
 4. **SWD (Serial Wire Debug)**: Debug Seriale
 
    https://github.com/user-attachments/assets/56e714d9-2d30-4e40-b1a8-fadaffe74ecd
@@ -149,9 +156,14 @@ In questa sezione sono raccolte le dimostrazioni video del funzionamento della c
 https://github.com/user-attachments/assets/4093a128-0031-4e1a-bbd4-c421b6158af8
 
 
-7. **I2C - BME280 Environmental Sensor**: Rilevazione live di temperatura, pressione 
-   <!-- [Link Video 4  -->
-8. **SPI - External Flash (W25Qxx)**: Lettura degli asset grafici with/any internal asset
+7. **I2C - BME280 Environmental Sensor**: Rilevazione live di temperatura, pressione
+   
+
+
+https://github.com/user-attachments/assets/8558fc26-7a70-4fd1-92ef-c2e536edfbdc
+
+
+9. **SPI - External Flash (W25Qxx)**: Lettura degli asset grafici with/any internal asset
    -INTERNAL ASSET MODE ON
    
    <img width="623" height="122" alt="Screenshot 2026-10-07 alle 17 26 51" src="https://github.com/user-attachments/assets/b7f63aa1-a5f8-42a8-b254-dd922c4a6a2c" />
@@ -164,7 +176,12 @@ https://github.com/user-attachments/assets/4093a128-0031-4e1a-bbd4-c421b6158af8
 
 
 10. **SPI -  Touch Screen (XPT2046)**:
-   <!-- [Link Video 6 -->
+
+
+
+https://github.com/user-attachments/assets/7f1893d1-f3dd-4e22-bbee-2a0bf52fcef7
+
+
 11. **Error Handling**:
 
     
