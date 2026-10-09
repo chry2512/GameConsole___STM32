@@ -167,7 +167,13 @@ https://github.com/user-attachments/assets/4093a128-0031-4e1a-bbd4-c421b6158af8
    <!-- [Link Video 6 -->
 11. **Error Handling**:
 
-12. **Stop Mode**
+    
+
+https://github.com/user-attachments/assets/ba48c5ba-faad-4cc0-9e08-45797c373cce
+
+
+
+13. **Stop Mode**
    
 https://github.com/user-attachments/assets/10bd0c1f-33fd-4cc3-895b-ed0fa7daf5c0
 
